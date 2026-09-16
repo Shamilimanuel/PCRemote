@@ -52,12 +52,6 @@
           }
         }
       ]
-    ],
-    "extra": {
-      "eas": {
-        "projectId": "5b97340d-58a6-47c1-82f7-c52e3fbf2d76"
-      }
-    },
-    "owner": "kasaneteto0401"
+    ]
   }
 }

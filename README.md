@@ -77,29 +77,39 @@ The app uses three native modules — `react-native-udp` (Wake-on-LAN needs a re
 socket), `react-native-svg`, and AsyncStorage — so it **cannot run in Expo Go**. You have
 to build an actual app package. Two routes:
 
-### Route A — EAS cloud build (no local Android tooling)
+### Route A — GitHub Actions (no local Android tooling)
 
-Expo builds it on their servers and hands you an `.apk` to sideload. You need a free
-[Expo account](https://expo.dev/signup); the free tier's build queue is slow but works.
+Every push that touches `front-end/` builds the app on GitHub's machines and
+publishes a signed APK to the repo's Releases page. Open that page on the phone
+and install it — Android will ask you to allow installs from your browser.
+
+To trigger a build by hand without changing anything:
 
 ```bash
-cd front-end
-npm install
-npx eas-cli login
-npx eas-cli build:configure          # links the project to your Expo account, once
-npx eas-cli build --profile preview --platform android
+gh workflow run android.yml
 ```
 
-When it finishes, the CLI prints a download URL (and a QR code). Open it on the phone,
-install the APK — Android will ask you to allow installs from that browser — and you have
-a standalone app. No Metro server, no cable, nothing else running.
+The workflow lives in `.github/workflows/android.yml`. It runs `expo prebuild`,
+builds a release APK with Gradle, then re-signs it with `apksigner` using the
+keystore held in repo secrets — Gradle would otherwise sign release builds with
+Expo's throwaway debug key, and the phone would reject the result as a different
+app.
 
-The `preview` profile in `eas.json` is the one that produces a self-contained APK. Use
-`--profile development` instead if you want the dev-client build that hot-reloads against
-`npx expo start --dev-client`, and `--profile production` for a Play Store `.aab`.
+Version codes come from the workflow run number, so each build installs over the
+last without hand-editing `app.json`.
 
-For iOS, `--platform ios` needs a paid Apple Developer account to install on a real
-device; without one, only the simulator build (macOS) is possible.
+**Signing secrets** (Settings → Secrets and variables → Actions):
+
+| Secret | What it holds |
+| --- | --- |
+| `ANDROID_KEYSTORE_BASE64` | the `.jks` keystore, base64-encoded |
+| `ANDROID_KEYSTORE_PASSWORD` | keystore password |
+| `ANDROID_KEY_ALIAS` | key alias |
+| `ANDROID_KEY_PASSWORD` | key password |
+
+The keystore itself lives outside the repo in `secrets/` (gitignored). Losing
+every copy means never being able to update the installed app again — see
+`secrets/READ-ME-FIRST.txt`.
 
 ### Route B — build locally
 
@@ -175,9 +185,10 @@ PCRemote/
 │   │   └── config.js     token + network info
 │   ├── install-agent-task.ps1
 │   └── uninstall-agent-task.ps1
+├── .github/workflows/
+│   └── android.yml   builds + signs the APK, publishes it to Releases
 └── front-end/    Expo React Native app
     ├── app.json          native permissions, cleartext HTTP, bundle IDs
-    ├── eas.json          build profiles (development / preview / production)
     ├── App.tsx           screen switching + device state
     └── src/
         ├── screens/      DeviceList, DeviceForm, Control
