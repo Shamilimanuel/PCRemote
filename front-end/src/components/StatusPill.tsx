@@ -5,12 +5,15 @@ import { DeviceStatus } from '../types/device';
 const LABELS: Record<DeviceStatus, string> = {
   unknown: 'Checking…',
   online: 'Online',
+  locked: 'Lock screen',
   offline: 'Offline',
 };
 
 const COLORS: Record<DeviceStatus, string> = {
   unknown: '#8A8F9C',
   online: '#5FD68C',
+  // Amber rather than green: the PC is on, but nothing here can act on it yet.
+  locked: '#E0B15F',
   offline: '#5A5F6B',
 };
 

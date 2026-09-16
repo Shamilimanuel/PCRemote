@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Device, DeviceStatus, HealthResponse, Route } from '../types/device';
-import { pingHealth } from '../lib/api';
+import { pingHealth, pingPresence } from '../lib/api';
 
 const DEFAULT_INTERVAL_MS = 10000;
 
@@ -17,8 +17,18 @@ type Result = {
 
 /**
  * Polls the agent's /health endpoint so the UI can show whether the PC is
- * actually awake. A failed poll means "not reachable", which from the phone's
- * point of view is indistinguishable from off/asleep -- both render as offline.
+ * actually awake.
+ *
+ * When that fails it asks the lock-screen responder as well, because those two
+ * failures are not the same thing. A PC woken from a full shutdown boots to the
+ * lock screen and sits there, plainly on, while the agent -- which Windows only
+ * starts once someone logs in -- is not running yet. Treating that as offline
+ * is what made waking a PC look like it had done nothing until somebody walked
+ * over and typed a PIN.
+ *
+ * The second ping only happens on the failing path, so a healthy PC still costs
+ * exactly one request per interval. A PC that is genuinely off costs two, both
+ * of which fail on the same short timeout.
  */
 export function useDeviceStatus(device: Device, intervalMs = DEFAULT_INTERVAL_MS): Result {
   const [status, setStatus] = useState<DeviceStatus>('unknown');
@@ -47,6 +57,21 @@ export function useDeviceStatus(device: Device, intervalMs = DEFAULT_INTERVAL_MS
         setLatencyMs(Date.now() - startedAt);
         setRoute(via);
         setStatus('online');
+        return;
+      } catch {
+        if (cancelled) return;
+      }
+
+      // Health is deliberately left null here. The responder knows the machine
+      // is on and nothing else -- no stats, no capabilities -- and handing the
+      // UI a half-filled reply would have it draw panels out of missing data.
+      try {
+        await pingPresence(deviceRef.current);
+        if (cancelled) return;
+        setHealth(null);
+        setLatencyMs(null);
+        setRoute(null);
+        setStatus('locked');
       } catch {
         if (cancelled) return;
         setHealth(null);

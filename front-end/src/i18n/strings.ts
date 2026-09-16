@@ -13,6 +13,7 @@ export const en = {
   noPcsTitle: 'No PCs yet',
   noPcsBody: 'Tap “+ Add PC” to get started. There’s a ? there if you haven’t set the PC up yet.',
   awake: 'Awake',
+  atLockScreen: 'Lock screen',
   asleep: 'Asleep',
   checking: '…',
 
@@ -40,6 +41,8 @@ export const en = {
 
   offlineFootnote:
     'The PC isn’t answering — it’s off, asleep, or not running the agent. Only Wake will do anything until it’s back.',
+  lockedFootnote:
+    'The PC is on and waiting at its lock screen. Sign in on the PC and the rest of these come back.',
   onlineFootnote:
     'Wake works over your own Wi-Fi only. A powered-off PC has nothing listening for anything else.',
 
@@ -234,6 +237,7 @@ export const nl: Strings = {
   noPcsBody:
     'Tik op “+ Pc toevoegen” om te beginnen. Daar staat een ? als je de pc nog niet hebt ingesteld.',
   awake: 'Wakker',
+  atLockScreen: 'Vergrendelscherm',
   asleep: 'Slaapt',
   checking: '…',
 
@@ -260,6 +264,8 @@ export const nl: Strings = {
 
   offlineFootnote:
     'De pc antwoordt niet — hij staat uit, slaapt, of draait de agent niet. Alleen Wekken doet iets tot hij terug is.',
+  lockedFootnote:
+    'De pc staat aan en wacht op het vergrendelscherm. Meld je aan op de pc, dan werken de rest weer.',
   onlineFootnote:
     'Wekken werkt alleen op je eigen wifi. Een uitgeschakelde pc luistert nergens anders naar.',
 
