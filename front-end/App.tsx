@@ -3,6 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider, useTheme } from './src/theme/ThemeContext';
+import { DialogProvider } from './src/components/Dialog';
 import { Device } from './src/types/device';
 import { getDevices, saveDevice, deleteDevice } from './src/lib/storage';
 import DeviceListScreen from './src/screens/DeviceListScreen';
@@ -17,7 +18,9 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <ThemeProvider>
-        <Shell />
+        <DialogProvider>
+          <Shell />
+        </DialogProvider>
       </ThemeProvider>
     </SafeAreaProvider>
   );

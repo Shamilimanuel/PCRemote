@@ -1,10 +1,19 @@
 const { exec } = require('child_process');
 
-// shutdown/restart get a short delay so the HTTP response can reach the
-// phone before the OS starts tearing the network stack down.
-const ACTIONS = {
-  shutdown: 'shutdown /s /t 5',
-  restart: 'shutdown /r /t 5',
+// A short delay by default so the HTTP response reaches the phone before the
+// OS starts tearing the network stack down.
+const DEFAULT_DELAY_SECONDS = 5;
+
+// Two hours is plenty for "shut down when this download finishes", and keeps
+// the value somewhere Windows will actually accept.
+const MAX_DELAY_SECONDS = 7200;
+
+const TIMED = {
+  shutdown: '/s',
+  restart: '/r',
+};
+
+const IMMEDIATE = {
   sleep: 'rundll32.exe powrprof.dll,SetSuspendState 0,1,0',
   lock: 'rundll32.exe user32.dll,LockWorkStation',
 };
@@ -24,20 +33,45 @@ const CANCEL_COMMAND = 'shutdown /a';
 const FIRMWARE_TASK = 'ReveilleFirmwareReboot';
 const FIRMWARE_ACTION = 'firmware';
 
+/**
+ * What the agent last scheduled, so the app can show a countdown.
+ *
+ * Windows has no reliable way to ask "is a shutdown pending", so this is the
+ * agent remembering what it did. It is forgotten if the agent restarts, which
+ * is honest -- `shutdown /a` still works either way.
+ */
+let pending = null;
+
+function getPending() {
+  if (pending && pending.atMs <= Date.now()) pending = null;
+  return pending;
+}
+
 function isValidAction(action) {
-  return action === FIRMWARE_ACTION || Object.prototype.hasOwnProperty.call(ACTIONS, action);
+  return (
+    action === FIRMWARE_ACTION ||
+    Object.prototype.hasOwnProperty.call(TIMED, action) ||
+    Object.prototype.hasOwnProperty.call(IMMEDIATE, action)
+  );
+}
+
+/** Clamps whatever the app asked for into something Windows will take. */
+function normalizeDelay(seconds) {
+  const value = Number(seconds);
+  if (!Number.isFinite(value)) return DEFAULT_DELAY_SECONDS;
+  return Math.max(0, Math.min(MAX_DELAY_SECONDS, Math.round(value)));
 }
 
 /** Whether the elevated task has been installed, so the app can hide the button. */
 function hasFirmwareTask() {
   return new Promise((resolve) => {
-    exec(`schtasks /query /tn "${FIRMWARE_TASK}"`, (error) => resolve(!error));
+    exec(`schtasks /query /tn "${FIRMWARE_TASK}"`, { windowsHide: true }, (error) => resolve(!error));
   });
 }
 
 function runFirmwareReboot() {
   return new Promise((resolve, reject) => {
-    exec(`schtasks /run /tn "${FIRMWARE_TASK}"`, (error, stdout, stderr) => {
+    exec(`schtasks /run /tn "${FIRMWARE_TASK}"`, { windowsHide: true }, (error, stdout, stderr) => {
       if (error) {
         reject(new Error(
           'Reboot to BIOS is not set up on this PC. Run install-firmware-task.ps1 as administrator.'
@@ -49,38 +83,51 @@ function runFirmwareReboot() {
   });
 }
 
-function runAction(action) {
-  if (action === FIRMWARE_ACTION) return runFirmwareReboot();
-
+function shell(command) {
   return new Promise((resolve, reject) => {
-    const cmd = ACTIONS[action];
-    if (!cmd) {
-      reject(new Error(`Unknown action: ${action}`));
-      return;
-    }
-    exec(cmd, (error, stdout, stderr) => {
-      if (error) {
-        reject(error);
-        return;
-      }
-      resolve({ stdout, stderr });
+    exec(command, { windowsHide: true }, (error, stdout, stderr) => {
+      if (error) reject(error);
+      else resolve({ stdout, stderr });
     });
   });
 }
 
-function cancelPendingShutdown() {
-  return new Promise((resolve) => {
-    // This fails harmlessly if nothing was pending; we don't treat that as an error.
-    exec(CANCEL_COMMAND, () => resolve());
-  });
+async function runAction(action, options = {}) {
+  if (action === FIRMWARE_ACTION) return runFirmwareReboot();
+
+  if (IMMEDIATE[action]) {
+    return shell(IMMEDIATE[action]);
+  }
+
+  const flag = TIMED[action];
+  if (!flag) throw new Error(`Unknown action: ${action}`);
+
+  const delay = normalizeDelay(options.delaySeconds ?? DEFAULT_DELAY_SECONDS);
+  const result = await shell(`shutdown ${flag} /t ${delay}`);
+
+  pending = {
+    action,
+    delaySeconds: delay,
+    atMs: Date.now() + delay * 1000,
+  };
+  return result;
+}
+
+async function cancelPendingShutdown() {
+  pending = null;
+  // Fails harmlessly if nothing was scheduled; that isn't an error.
+  await shell(CANCEL_COMMAND).catch(() => {});
 }
 
 module.exports = {
-  ACTIONS,
+  DEFAULT_DELAY_SECONDS,
+  MAX_DELAY_SECONDS,
   FIRMWARE_TASK,
   FIRMWARE_ACTION,
   isValidAction,
+  normalizeDelay,
   hasFirmwareTask,
   runAction,
   cancelPendingShutdown,
+  getPending,
 };

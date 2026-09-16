@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, TextInput, Pressable, StyleSheet, ScrollView, Alert } from 'react-native';
+import { View, Text, TextInput, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Device } from '../types/device';
 import { checkHealth } from '../lib/api';
@@ -8,6 +8,8 @@ import { RADIUS, sunken } from '../theme/clay';
 import { ClayButton } from '../components/Clay';
 import { HelpIcon } from '../components/icons';
 import HelpSheet from '../components/HelpSheet';
+import { useDialog } from '../components/Dialog';
+import { explain } from '../lib/errors';
 import { play } from '../lib/sound';
 import { successFeedback, failureFeedback, tapFeedback } from '../lib/haptics';
 
@@ -34,6 +36,7 @@ export default function DeviceFormScreen({
   onDelete,
 }: Props) {
   const { theme } = useTheme();
+  const { show } = useDialog();
   const [name, setName] = useState(initial?.name ?? '');
   const [ip, setIp] = useState(initial?.ip ?? '');
   const [port, setPort] = useState(initial ? String(initial.port) : '5533');
@@ -77,11 +80,16 @@ export default function DeviceFormScreen({
       await checkHealth(buildDevice());
       play('done');
       successFeedback();
-      Alert.alert('Connected', 'Your PC answered. Tap Save to keep it.');
+      show({
+        tone: 'good',
+        title: 'Connected',
+        message: 'Your PC answered. Tap Save to keep it.',
+      });
     } catch (err) {
+      const { title, message } = explain(err, 'reach');
       play('fail');
       failureFeedback();
-      Alert.alert('No answer', (err as Error).message);
+      show({ tone: 'bad', title, message });
     } finally {
       setTesting(false);
     }

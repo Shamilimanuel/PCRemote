@@ -82,10 +82,16 @@ export function pingHealth(device: Device) {
   return request<HealthResponse>(device, '/health', undefined, PING_TIMEOUT_MS);
 }
 
-export function sendAction(device: Device, action: Exclude<PendingAction, null>) {
+export function sendAction(
+  device: Device,
+  action: Exclude<PendingAction, null>,
+  delaySeconds?: number
+) {
   return request(device, '/action', {
     method: 'POST',
-    body: JSON.stringify({ action }),
+    body: JSON.stringify(
+      delaySeconds === undefined ? { action } : { action, delaySeconds }
+    ),
   });
 }
 

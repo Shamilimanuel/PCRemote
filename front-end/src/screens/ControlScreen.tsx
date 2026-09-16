@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { View, Text, Pressable, ScrollView, StyleSheet, Alert } from 'react-native';
+import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Device } from '../types/device';
 import { sendAction, cancelShutdown } from '../lib/api';
@@ -9,8 +9,12 @@ import { useTheme } from '../theme/ThemeContext';
 import { RADIUS, sunken } from '../theme/clay';
 import { Blob, ClayButton, Surface } from '../components/Clay';
 import NetworkInfo from '../components/NetworkInfo';
+import Vitals from '../components/Vitals';
+import TimerSheet from '../components/TimerSheet';
+import { useDialog } from '../components/Dialog';
+import { explain } from '../lib/errors';
 import { play, Voice } from '../lib/sound';
-import { successFeedback, failureFeedback, warningFeedback } from '../lib/haptics';
+import { successFeedback, failureFeedback } from '../lib/haptics';
 import {
   AbortIcon,
   ChipIcon,
@@ -55,9 +59,12 @@ const LABEL: Record<ActionKey, string> = {
 
 export default function ControlScreen({ device, onBack, onEdit, onSettings }: Props) {
   const { theme, settings } = useTheme();
+  const { show } = useDialog();
   const [busy, setBusy] = useState<ActionKey | null>(null);
   const [result, setResult] = useState<{ key: ActionKey; ok: boolean } | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  // Which action is waiting on a delay to be chosen.
+  const [timerFor, setTimerFor] = useState<ActionKey | null>(null);
 
   const { status, health, latencyMs, route, refresh } = useDeviceStatus(
     device,
@@ -79,7 +86,7 @@ export default function ControlScreen({ device, onBack, onEdit, onSettings }: Pr
     clearTimer.current = setTimeout(() => setResult(null), 1600);
   }, []);
 
-  async function run(key: ActionKey) {
+  async function run(key: ActionKey, delaySeconds?: number) {
     setBusy(key);
     setResult(null);
     setMessage(null);
@@ -91,12 +98,19 @@ export default function ControlScreen({ device, onBack, onEdit, onSettings }: Pr
         await cancelShutdown(device);
         report(key, true, 'Nothing left pending');
       } else {
-        await sendAction(device, key);
-        report(key, true, `${LABEL[key]} sent`);
+        await sendAction(device, key, delaySeconds);
+        report(
+          key,
+          true,
+          delaySeconds && delaySeconds > 60
+            ? `${LABEL[key]} in ${Math.round(delaySeconds / 60)} min`
+            : `${LABEL[key]} sent`
+        );
       }
     } catch (err) {
-      const text = (err as Error).message;
-      report(key, false, text.includes('Abort') ? 'No answer from the PC' : text);
+      const { title, message } = explain(err);
+      report(key, false, title);
+      show({ tone: 'bad', title, message });
     } finally {
       setBusy(null);
       // The PC takes a moment to go down or come up; re-check once it has.
@@ -105,23 +119,36 @@ export default function ControlScreen({ device, onBack, onEdit, onSettings }: Pr
   }
 
   function press(key: ActionKey) {
-    if (settings.confirmDestructive && DESTRUCTIVE.includes(key)) {
-      warningFeedback();
-      Alert.alert(
-        `${LABEL[key]} ${device.name}?`,
-        key === 'shutdown'
-          ? 'The PC will power off in a few seconds.'
-          : key === 'firmware'
-          ? 'The PC will restart into its BIOS settings screen. You’ll need to be at the keyboard — the phone can’t drive it from there.'
-          : 'The PC will restart in a few seconds.',
-        [
-          { text: 'Not now', style: 'cancel' },
-          { text: LABEL[key], style: 'destructive', onPress: () => run(key) },
-        ]
-      );
+    // 'hold' is handled by the button itself, which only calls through once
+    // the press has been sustained -- so by the time we get here it is confirmed.
+    if (settings.confirmStyle === 'dialog' && DESTRUCTIVE.includes(key)) {
+      show({
+        tone: 'warn',
+        title: `${LABEL[key]} ${device.name}?`,
+        message: describe(key),
+        cancelLabel: 'Not now',
+        confirmLabel: LABEL[key],
+        destructive: true,
+        onConfirm: () => run(key),
+      });
       return;
     }
     run(key);
+  }
+
+  function describe(key: ActionKey) {
+    return key === 'shutdown'
+      ? 'The PC will power off in a few seconds.'
+      : key === 'firmware'
+      ? 'The PC will restart into its BIOS settings screen. You\u2019ll need to be at the keyboard \u2014 the phone can\u2019t drive it from there.'
+      : 'The PC will restart in a few seconds.';
+  }
+
+  /** Long-press offers a delay, on agents new enough to accept one. */
+  function pressAndHoldForTimer(key: ActionKey) {
+    if (!health?.capabilities?.timedShutdown) return;
+    if (key !== 'shutdown' && key !== 'restart') return;
+    setTimerFor(key);
   }
 
   const offline = status === 'offline';
@@ -201,7 +228,9 @@ export default function ControlScreen({ device, onBack, onEdit, onSettings }: Pr
               busy={busy === 'restart'}
               dimmed={offline}
               result={resultFor('restart')}
+              hold={settings.confirmStyle === 'hold'}
               onPress={() => press('restart')}
+              onLongPress={() => pressAndHoldForTimer('restart')}
             />
           </View>
           <View style={styles.gridRow}>
@@ -233,7 +262,9 @@ export default function ControlScreen({ device, onBack, onEdit, onSettings }: Pr
               busy={busy === 'shutdown'}
               dimmed={offline}
               result={resultFor('shutdown')}
+              hold={settings.confirmStyle === 'hold'}
               onPress={() => press('shutdown')}
+              onLongPress={() => pressAndHoldForTimer('shutdown')}
             />
             <Blob
               Icon={AbortIcon}
@@ -260,6 +291,15 @@ export default function ControlScreen({ device, onBack, onEdit, onSettings }: Pr
           />
         )}
 
+        {health?.pending && (
+          <View style={[styles.pending, { backgroundColor: theme.ground }]}>
+            <Text style={[styles.pendingText, { color: theme.dawnDeep }]}>
+              {health.pending.action === 'restart' ? 'Restarting' : 'Shutting down'} in{' '}
+              {formatCountdown(health.pending.secondsRemaining)} — tap Cancel to call it off
+            </Text>
+          </View>
+        )}
+
         {message && (
           <Text
             style={[
@@ -271,6 +311,8 @@ export default function ControlScreen({ device, onBack, onEdit, onSettings }: Pr
           </Text>
         )}
 
+        <Vitals stats={health?.stats} />
+
         <NetworkInfo device={device} health={health} latencyMs={latencyMs} status={status} route={route} />
 
         <Text style={[styles.footnote, { color: theme.ink3 }]}>
@@ -279,8 +321,29 @@ export default function ControlScreen({ device, onBack, onEdit, onSettings }: Pr
             : 'Wake works over your own Wi-Fi only. A powered-off PC has nothing listening for anything else.'}
         </Text>
       </ScrollView>
+
+      <TimerSheet
+        visible={timerFor !== null}
+        verb={timerFor === 'restart' ? 'Restart' : 'Shut down'}
+        onPick={(seconds) => {
+          const key = timerFor;
+          setTimerFor(null);
+          if (key) run(key, seconds);
+        }}
+        onClose={() => setTimerFor(null)}
+      />
     </SafeAreaView>
   );
+}
+
+function formatCountdown(seconds: number): string {
+  if (seconds >= 3600) {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.round((seconds % 3600) / 60);
+    return minutes ? `${hours}h ${minutes}m` : `${hours}h`;
+  }
+  if (seconds >= 60) return `${Math.round(seconds / 60)} min`;
+  return `${seconds}s`;
 }
 
 const styles = StyleSheet.create({
@@ -328,5 +391,7 @@ const styles = StyleSheet.create({
 
   bios: { marginTop: 12 },
   message: { fontSize: 13, fontWeight: '800', textAlign: 'center', marginTop: 16 },
+  pending: { borderRadius: RADIUS.field, paddingVertical: 12, paddingHorizontal: 15, marginTop: 14 },
+  pendingText: { fontSize: 12.5, fontWeight: '700', textAlign: 'center', lineHeight: 18 },
   footnote: { fontSize: 11.5, lineHeight: 17, fontWeight: '600', marginTop: 18 },
 });

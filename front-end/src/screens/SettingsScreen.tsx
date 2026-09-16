@@ -8,7 +8,7 @@ import {
 } from '../lib/updates';
 import { useTheme } from '../theme/ThemeContext';
 import { THEMES, ThemeName, RADIUS, raised, sunken, filled } from '../theme/clay';
-import { POLL_CHOICES } from '../lib/settings';
+import { POLL_CHOICES, ConfirmStyle } from '../lib/settings';
 import { Surface, ClaySwitch, ClayButton } from '../components/Clay';
 import { play } from '../lib/sound';
 import { successFeedback, failureFeedback, tapFeedback } from '../lib/haptics';
@@ -80,16 +80,44 @@ export default function SettingsScreen({ onBack }: { onBack: () => void }) {
 
         <Label>Safety</Label>
         <Row
-          title="Ask before shutting down"
+          title="Before shutting down"
           hint="Also covers restart and BIOS"
           right={
-            <ClaySwitch
-              value={settings.confirmDestructive}
-              onChange={(v) => update({ confirmDestructive: v })}
-              label="Ask before shutting down"
-            />
+            <View style={styles.segment}>
+              {([
+                ['hold', 'Hold'],
+                ['dialog', 'Ask'],
+                ['off', 'Off'],
+              ] as [ConfirmStyle, string][]).map(([value, label]) => {
+                const selected = settings.confirmStyle === value;
+                return (
+                  <Pressable
+                    key={value}
+                    style={[styles.segItem, selected && filled(theme, theme.dusk, 'rgba(0,0,0,0.25)')]}
+                    onPress={() => {
+                      update({ confirmStyle: value });
+                      play('tap');
+                      tapFeedback();
+                    }}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected }}
+                  >
+                    <Text style={[styles.segText, { color: selected ? '#FFFFFF' : theme.ink3 }]}>
+                      {label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
           }
         />
+        <Text style={[styles.rowNote, { color: theme.ink3 }]}>
+          {settings.confirmStyle === 'hold'
+            ? 'Press and hold the button until it fills. Let go early and nothing happens.'
+            : settings.confirmStyle === 'dialog'
+            ? 'A panel asks you to confirm first.'
+            : 'Shutdown fires the moment you tap it.'}
+        </Text>
 
         <Label>Check the PC</Label>
         <Row
@@ -257,6 +285,7 @@ const styles = StyleSheet.create({
   segment: { flexDirection: 'row', gap: 5 },
   segItem: { paddingVertical: 7, paddingHorizontal: 11, borderRadius: 12 },
   segText: { fontSize: 11.5, fontWeight: '800' },
+  rowNote: { fontSize: 11.5, fontWeight: '600', lineHeight: 17, marginTop: -2, marginBottom: 4, paddingHorizontal: 4 },
 
   aboutCard: { borderRadius: RADIUS.field, padding: 15 },
   aboutLine: { fontSize: 13, fontWeight: '700' },

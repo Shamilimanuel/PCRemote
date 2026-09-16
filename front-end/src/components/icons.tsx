@@ -109,13 +109,19 @@ export function ChipIcon(props: IconProps) {
   );
 }
 
-export function GearIcon(props: IconProps) {
+/**
+ * A solid cog rather than an outline. The outlined version read as a sun --
+ * the teeth need mass to be recognisable at 20px, and a filled shape sits
+ * better against clay anyway. The hole comes from the even-odd fill rule.
+ */
+const GEAR_PATH =
+  'M12.92 2.65 L14.73 3.00 L15.30 5.83 L16.44 6.59 L19.27 6.04 L20.29 7.57 L18.70 9.97 L18.97 11.31 L21.35 12.92 L21.00 14.73 L18.17 15.30 L17.41 16.44 L17.96 19.27 L16.43 20.29 L14.03 18.70 L12.69 18.97 L11.08 21.35 L9.27 21.00 L8.70 18.17 L7.56 17.41 L4.73 17.96 L3.71 16.43 L5.30 14.03 L5.03 12.69 L2.65 11.08 L3.00 9.27 L5.83 8.70 L6.59 7.56 L6.04 4.73 L7.57 3.71 L9.97 5.30 L11.31 5.03 Z M12 8.6 a3.4 3.4 0 1 0 0 6.8 a3.4 3.4 0 1 0 0-6.8 Z';
+
+export function GearIcon({ size = 26, color = '#FFFFFF' }: IconProps) {
   return (
-    <Icon {...props}>
-      <Circle cx="12" cy="12" r="3.3" />
-      <Path d="M12 2.5v2.2M12 19.3v2.2M21.5 12h-2.2M4.7 12H2.5" />
-      <Path d="M18.7 5.3l-1.6 1.6M6.9 17.1l-1.6 1.6M18.7 18.7l-1.6-1.6M6.9 6.9L5.3 5.3" />
-    </Icon>
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Path d={GEAR_PATH} fill={color} fillRule="evenodd" strokeLinejoin="round" />
+    </Svg>
   );
 }
 

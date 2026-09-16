@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -7,11 +7,14 @@ import {
   ViewStyle,
   StyleProp,
   ActivityIndicator,
+  Animated,
+  Easing,
 } from 'react-native';
 import { useTheme } from '../theme/ThemeContext';
 import { filled, pressed, raised, sunken, RADIUS } from '../theme/clay';
 import { play, Voice } from '../lib/sound';
-import { tapFeedback } from '../lib/haptics';
+import { tapFeedback, warningFeedback, successFeedback } from '../lib/haptics';
+import { HOLD_MS } from '../lib/settings';
 import { IconProps } from './icons';
 
 /**
@@ -46,6 +49,15 @@ type BlobProps = {
   danger?: boolean;
   /** Shows a tick or a cross in the corner once the action reports back. */
   result?: 'ok' | 'bad' | null;
+  /**
+   * Require a sustained press instead of a tap. The button fills as it charges
+   * and only fires when full -- a confirmation you feel rather than dismiss.
+   */
+  hold?: boolean;
+  /** Fired when a hold is abandoned before it completes. */
+  onHoldCancel?: () => void;
+  /** A separate long-press gesture, used to offer a delay. */
+  onLongPress?: () => void;
   style?: StyleProp<ViewStyle>;
 };
 
@@ -59,10 +71,57 @@ export function Blob({
   accent,
   danger,
   result,
+  hold,
+  onHoldCancel,
+  onLongPress,
   style,
 }: BlobProps) {
   const { theme } = useTheme();
   const [down, setDown] = useState(false);
+
+  // Driven natively so the fill stays smooth while JS is busy talking to the PC.
+  const charge = useRef(new Animated.Value(0)).current;
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fired = useRef(false);
+
+  useEffect(() => {
+    return () => {
+      if (timer.current) clearTimeout(timer.current);
+    };
+  }, []);
+
+  function startHold() {
+    fired.current = false;
+    charge.setValue(0);
+    Animated.timing(charge, {
+      toValue: 1,
+      duration: HOLD_MS,
+      easing: Easing.linear,
+      useNativeDriver: true,
+    }).start();
+
+    timer.current = setTimeout(() => {
+      fired.current = true;
+      successFeedback();
+      play('done');
+      onPress();
+    }, HOLD_MS);
+  }
+
+  function endHold() {
+    if (timer.current) {
+      clearTimeout(timer.current);
+      timer.current = null;
+    }
+    Animated.timing(charge, {
+      toValue: 0,
+      duration: 180,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: true,
+    }).start();
+    // Let go early and nothing happens, which is the point.
+    if (!fired.current) onHoldCancel?.();
+  }
 
   const base = accent
     ? filled(theme, theme.dawn, 'rgba(0,0,0,0.18)')
@@ -82,14 +141,43 @@ export function Blob({
       onPressIn={() => {
         setDown(true);
         play(voice);
-        tapFeedback();
+        if (hold) {
+          warningFeedback();
+          startHold();
+        } else {
+          tapFeedback();
+        }
       }}
-      onPressOut={() => setDown(false)}
-      onPress={onPress}
+      onPressOut={() => {
+        setDown(false);
+        if (hold) endHold();
+      }}
+      onPress={hold ? undefined : onPress}
+      onLongPress={onLongPress}
+      delayLongPress={600}
       disabled={busy}
       accessibilityRole="button"
-      accessibilityLabel={label}
+      accessibilityLabel={hold ? `${label}. Press and hold.` : label}
+      accessibilityHint={hold ? 'Hold until the button fills' : undefined}
     >
+      {hold && (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.charge,
+            {
+              backgroundColor: danger ? theme.danger : theme.dusk,
+              opacity: charge.interpolate({ inputRange: [0, 0.05, 1], outputRange: [0, 0.3, 0.45] }),
+              transform: [
+                { translateX: -CHARGE_WIDTH / 2 },
+                { scaleX: charge },
+                { translateX: CHARGE_WIDTH / 2 },
+              ],
+            },
+          ]}
+        />
+      )}
+
       {busy ? (
         <ActivityIndicator color={iconColour} style={styles.spinner} />
       ) : (
@@ -164,6 +252,7 @@ export function ClayButton({
       accessibilityRole="button"
       accessibilityLabel={label}
     >
+
       {busy ? (
         <ActivityIndicator color={colour} />
       ) : (
@@ -216,7 +305,17 @@ export function ClaySwitch({
   );
 }
 
+// Wide enough that scaleX never leaves a gap at any sensible button size.
+const CHARGE_WIDTH = 400;
+
 const styles = StyleSheet.create({
+  charge: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: CHARGE_WIDTH,
+  },
   blob: {
     flex: 1,
     borderRadius: RADIUS.blob,
@@ -226,6 +325,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 9,
     minHeight: 104,
+    overflow: 'hidden',
   },
   blobLabel: { fontWeight: '800', fontSize: 12.5 },
   dimmed: { opacity: 0.42 },
