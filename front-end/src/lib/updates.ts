@@ -2,11 +2,6 @@ import * as Application from 'expo-application';
 
 const RELEASES_API = 'https://api.github.com/repos/Shamilimanuel/PCRemote/releases/latest';
 
-// The build workflow sets versionCode = VERSION_CODE_BASE + the run number, and
-// tags the matching release v1.0.<run number>. So the two stay in lockstep and
-// comparing them needs no extra bookkeeping.
-const VERSION_CODE_BASE = 100;
-
 export type UpdateInfo = {
   version: string;
   downloadUrl: string;
@@ -23,26 +18,26 @@ export type UpdateCheck =
   | { state: 'available'; info: UpdateInfo }
   | { state: 'error'; reason: string };
 
+/**
+ * The version in app.json is the single source of truth: the build derives
+ * Android's versionCode from it and tags the release with it, so comparing the
+ * two names is comparing the same thing.
+ */
 export function installedVersionLabel(): string {
-  const name = Application.nativeApplicationVersion ?? '1.0.0';
-  const build = Application.nativeBuildVersion;
-  if (!build) return name;
-  const run = Number(build) - VERSION_CODE_BASE;
-  // Builds from this workflow can show the tag they came from; anything else
-  // (an old EAS build, a local one) just shows its raw build number.
-  return run > 0 ? `v1.0.${run}` : `${name} (build ${build})`;
+  return Application.nativeApplicationVersion ?? '0.0.0';
 }
 
-function installedRun(): number | null {
-  const raw = Application.nativeBuildVersion;
-  if (!raw) return null;
-  const code = Number(raw);
-  return Number.isFinite(code) ? code - VERSION_CODE_BASE : null;
+function parse(version: string): [number, number, number] | null {
+  const m = /^v?(\d+)\.(\d+)\.(\d+)/.exec(version.trim());
+  return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null;
 }
 
-function releasedRun(tag: string): number | null {
-  const m = /^v\d+\.\d+\.(\d+)$/.exec(tag.trim());
-  return m ? Number(m[1]) : null;
+/** Positive when `a` is newer than `b`. */
+function compare(a: [number, number, number], b: [number, number, number]): number {
+  for (let i = 0; i < 3; i++) {
+    if (a[i] !== b[i]) return a[i] - b[i];
+  }
+  return 0;
 }
 
 export async function checkForUpdateDetailed(): Promise<UpdateCheck> {
@@ -66,12 +61,12 @@ export async function checkForUpdateDetailed(): Promise<UpdateCheck> {
     }
 
     const release = await response.json();
-    const here = installedRun();
-    const there = releasedRun(release.tag_name ?? '');
+    const here = parse(installedVersionLabel());
+    const there = parse(release.tag_name ?? '');
 
-    if (here === null) return { state: 'error', reason: 'Could not read this app’s version.' };
-    if (there === null) return { state: 'error', reason: 'The latest release has an odd name.' };
-    if (there <= here) return { state: 'current', installed: installedVersionLabel() };
+    if (!here) return { state: 'error', reason: 'Could not read this app’s version.' };
+    if (!there) return { state: 'error', reason: 'The latest release has an odd name.' };
+    if (compare(there, here) <= 0) return { state: 'current', installed: installedVersionLabel() };
 
     const apk = (release.assets ?? []).find((a: any) => String(a.name).endsWith('.apk'));
     if (!apk) return { state: 'error', reason: 'That release has no app file attached.' };
@@ -97,8 +92,8 @@ export async function checkForUpdateDetailed(): Promise<UpdateCheck> {
 
 /**
  * Returns the newer release if there is one, otherwise null. Never throws --
- * the banner should stay quiet when the check fails, since Settings is where
- * you go to find out why.
+ * the banner stays quiet when a check fails, since Settings is where you go to
+ * find out why.
  */
 export async function checkForUpdate(): Promise<UpdateInfo | null> {
   const result = await checkForUpdateDetailed();
