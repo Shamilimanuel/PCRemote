@@ -1,24 +1,20 @@
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Alert,
-  ActivityIndicator,
-} from 'react-native';
+import React, { useCallback, useRef, useState } from 'react';
+import { View, Text, Pressable, ScrollView, StyleSheet, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Device } from '../types/device';
 import { sendAction, cancelShutdown } from '../lib/api';
 import { sendMagicPacket } from '../lib/wol';
 import { useDeviceStatus, formatUptime } from '../hooks/useDeviceStatus';
-import StatusPill from '../components/StatusPill';
+import { useTheme } from '../theme/ThemeContext';
+import { RADIUS, sunken } from '../theme/clay';
+import { Blob, ClayButton, Surface } from '../components/Clay';
 import NetworkInfo from '../components/NetworkInfo';
+import { play, Voice } from '../lib/sound';
+import { successFeedback, failureFeedback, warningFeedback } from '../lib/haptics';
 import {
   AbortIcon,
   ChipIcon,
-  IconProps,
+  GearIcon,
   LockIcon,
   MoonIcon,
   PowerIcon,
@@ -30,33 +26,77 @@ type Props = {
   device: Device;
   onBack: () => void;
   onEdit: () => void;
+  onSettings: () => void;
 };
 
 type ActionKey = 'start' | 'shutdown' | 'restart' | 'sleep' | 'lock' | 'cancel' | 'firmware';
 
 const DESTRUCTIVE: ActionKey[] = ['shutdown', 'restart', 'firmware'];
 
-export default function ControlScreen({ device, onBack, onEdit }: Props) {
-  const [busy, setBusy] = useState<ActionKey | null>(null);
-  const [statusText, setStatusText] = useState<string | null>(null);
-  const { status, health, latencyMs, route, refresh } = useDeviceStatus(device);
+const VOICE: Record<ActionKey, Voice> = {
+  start: 'wake',
+  shutdown: 'shutdown',
+  restart: 'restart',
+  sleep: 'sleep',
+  lock: 'lock',
+  cancel: 'cancel',
+  firmware: 'bios',
+};
 
-  async function run(actionKey: ActionKey) {
-    setBusy(actionKey);
-    setStatusText(null);
+const LABEL: Record<ActionKey, string> = {
+  start: 'Wake',
+  shutdown: 'Shut down',
+  restart: 'Restart',
+  sleep: 'Sleep',
+  lock: 'Lock',
+  cancel: 'Cancel',
+  firmware: 'Reboot to BIOS',
+};
+
+export default function ControlScreen({ device, onBack, onEdit, onSettings }: Props) {
+  const { theme, settings } = useTheme();
+  const [busy, setBusy] = useState<ActionKey | null>(null);
+  const [result, setResult] = useState<{ key: ActionKey; ok: boolean } | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const { status, health, latencyMs, route, refresh } = useDeviceStatus(
+    device,
+    settings.pollSeconds > 0 ? settings.pollSeconds * 1000 : 0
+  );
+
+  const clearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // The answer appears on the button that was pressed, because that is where
+  // your eye already is.
+  const report = useCallback((key: ActionKey, ok: boolean, text: string) => {
+    setResult({ key, ok });
+    setMessage(text);
+    play(ok ? 'done' : 'fail');
+    if (ok) successFeedback();
+    else failureFeedback();
+
+    if (clearTimer.current) clearTimeout(clearTimer.current);
+    clearTimer.current = setTimeout(() => setResult(null), 1600);
+  }, []);
+
+  async function run(key: ActionKey) {
+    setBusy(key);
+    setResult(null);
+    setMessage(null);
     try {
-      if (actionKey === 'start') {
+      if (key === 'start') {
         await sendMagicPacket(device.mac, device.ip);
-        setStatusText('Wake-on-LAN packet sent.');
-      } else if (actionKey === 'cancel') {
+        report(key, true, 'Wake-up signal sent');
+      } else if (key === 'cancel') {
         await cancelShutdown(device);
-        setStatusText('Pending shutdown/restart cancelled.');
+        report(key, true, 'Nothing left pending');
       } else {
-        await sendAction(device, actionKey);
-        setStatusText(`${labelFor(actionKey)} command sent.`);
+        await sendAction(device, key);
+        report(key, true, `${LABEL[key]} sent`);
       }
     } catch (err) {
-      Alert.alert('Failed', (err as Error).message);
+      const text = (err as Error).message;
+      report(key, false, text.includes('Abort') ? 'No answer from the PC' : text);
     } finally {
       setBusy(null);
       // The PC takes a moment to go down or come up; re-check once it has.
@@ -64,227 +104,229 @@ export default function ControlScreen({ device, onBack, onEdit }: Props) {
     }
   }
 
-  function handlePress(actionKey: ActionKey) {
-    if (DESTRUCTIVE.includes(actionKey)) {
+  function press(key: ActionKey) {
+    if (settings.confirmDestructive && DESTRUCTIVE.includes(key)) {
+      warningFeedback();
       Alert.alert(
-        `${labelFor(actionKey)} ${device.name}?`,
-        actionKey === 'shutdown'
+        `${LABEL[key]} ${device.name}?`,
+        key === 'shutdown'
           ? 'The PC will power off in a few seconds.'
-          : actionKey === 'firmware'
-          ? 'The PC will restart into its BIOS/UEFI settings screen. You’ll need to be at the keyboard — the phone can’t control it from there.'
+          : key === 'firmware'
+          ? 'The PC will restart into its BIOS settings screen. You’ll need to be at the keyboard — the phone can’t drive it from there.'
           : 'The PC will restart in a few seconds.',
         [
-          { text: 'Cancel', style: 'cancel' },
-          { text: labelFor(actionKey), style: 'destructive', onPress: () => run(actionKey) },
+          { text: 'Not now', style: 'cancel' },
+          { text: LABEL[key], style: 'destructive', onPress: () => run(key) },
         ]
       );
       return;
     }
-    run(actionKey);
+    run(key);
   }
 
-  // Dimmed, not disabled: a poll can be stale, and the user may well know
-  // better than the last health check did.
-  const agentUnreachable = status === 'offline';
+  const offline = status === 'offline';
+  const resultFor = (key: ActionKey) =>
+    result && result.key === key ? (result.ok ? 'ok' : 'bad') : null;
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.ground }]} edges={['top', 'bottom']}>
       <View style={styles.header}>
-        <Pressable onPress={onBack} hitSlop={10}>
-          <Text style={styles.back}>{'< Back'}</Text>
+        <Pressable onPress={onBack} hitSlop={12}>
+          <Text style={[styles.navText, { color: theme.dusk }]}>{'‹ PCs'}</Text>
         </Pressable>
-        <Pressable onPress={onEdit} hitSlop={10}>
-          <Text style={styles.edit}>Edit</Text>
-        </Pressable>
+        <View style={styles.headerRight}>
+          <Pressable onPress={onEdit} hitSlop={12}>
+            <Text style={[styles.navText, { color: theme.ink3 }]}>Edit</Text>
+          </Pressable>
+          <Pressable onPress={onSettings} hitSlop={12} accessibilityLabel="Settings">
+            <GearIcon size={21} color={theme.ink3} strokeWidth={1.9} />
+          </Pressable>
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Text style={styles.title}>{device.name}</Text>
-        <Text style={styles.subtitle}>
-          {device.ip}:{device.port}
-        </Text>
-        <Pressable style={styles.statusRow} onPress={refresh} hitSlop={8}>
-          <StatusPill status={status} detail={health ? `up ${formatUptime(health.uptimeSeconds)}` : undefined} />
-        </Pressable>
+        <Surface style={styles.card}>
+          <View style={styles.cardText}>
+            <Text style={[styles.name, { color: theme.ink }]} numberOfLines={1}>
+              {device.name}
+            </Text>
+            <Text style={[styles.address, { color: theme.ink3 }]}>
+              {device.ip}
+            </Text>
+          </View>
+          <Pressable onPress={refresh} hitSlop={10} accessibilityLabel="Check now">
+            <View style={[styles.pill, sunken(theme, 0.6)]}>
+              <View
+                style={[
+                  styles.dot,
+                  { backgroundColor: status === 'online' ? theme.moss : theme.ink3 },
+                ]}
+              />
+              <Text
+                style={[
+                  styles.pillText,
+                  { color: status === 'online' ? theme.moss : theme.ink3 },
+                ]}
+              >
+                {status === 'online' ? 'Awake' : status === 'offline' ? 'Asleep' : '…'}
+              </Text>
+            </View>
+          </Pressable>
+        </Surface>
+
+        {health && (
+          <Text style={[styles.uptime, { color: theme.ink3 }]}>
+            up {formatUptime(health.uptimeSeconds)}
+            {latencyMs !== null ? `  ·  ${latencyMs} ms` : ''}
+            {route === 'remote' ? '  ·  away from home' : ''}
+          </Text>
+        )}
 
         <View style={styles.grid}>
-          <ActionButton
-            Icon={PowerIcon}
-            label="Start"
-            busy={busy === 'start'}
-            dimmed={status === 'online'}
-            onPress={() => handlePress('start')}
-          />
-          <ActionButton
-            Icon={RestartIcon}
-            label="Restart"
-            busy={busy === 'restart'}
-            dimmed={agentUnreachable}
-            onPress={() => handlePress('restart')}
-          />
-          <ActionButton
-            Icon={MoonIcon}
-            label="Sleep"
-            busy={busy === 'sleep'}
-            dimmed={agentUnreachable}
-            onPress={() => handlePress('sleep')}
-          />
-          <ActionButton
-            Icon={LockIcon}
-            label="Lock"
-            busy={busy === 'lock'}
-            dimmed={agentUnreachable}
-            onPress={() => handlePress('lock')}
-          />
-          <ActionButton
-            Icon={PowerOffIcon}
-            label="Shutdown"
-            danger
-            busy={busy === 'shutdown'}
-            dimmed={agentUnreachable}
-            onPress={() => handlePress('shutdown')}
-          />
-          <ActionButton
-            Icon={AbortIcon}
-            label="Cancel pending"
-            busy={busy === 'cancel'}
-            dimmed={agentUnreachable}
-            onPress={() => handlePress('cancel')}
-          />
+          <View style={styles.gridRow}>
+            <Blob
+              Icon={PowerIcon}
+              label="Wake"
+              accent
+              voice={VOICE.start}
+              busy={busy === 'start'}
+              dimmed={status === 'online'}
+              result={resultFor('start')}
+              onPress={() => press('start')}
+            />
+            <Blob
+              Icon={RestartIcon}
+              label="Restart"
+              voice={VOICE.restart}
+              busy={busy === 'restart'}
+              dimmed={offline}
+              result={resultFor('restart')}
+              onPress={() => press('restart')}
+            />
+          </View>
+          <View style={styles.gridRow}>
+            <Blob
+              Icon={MoonIcon}
+              label="Sleep"
+              voice={VOICE.sleep}
+              busy={busy === 'sleep'}
+              dimmed={offline}
+              result={resultFor('sleep')}
+              onPress={() => press('sleep')}
+            />
+            <Blob
+              Icon={LockIcon}
+              label="Lock"
+              voice={VOICE.lock}
+              busy={busy === 'lock'}
+              dimmed={offline}
+              result={resultFor('lock')}
+              onPress={() => press('lock')}
+            />
+          </View>
+          <View style={styles.gridRow}>
+            <Blob
+              Icon={PowerOffIcon}
+              label="Shut down"
+              danger
+              voice={VOICE.shutdown}
+              busy={busy === 'shutdown'}
+              dimmed={offline}
+              result={resultFor('shutdown')}
+              onPress={() => press('shutdown')}
+            />
+            <Blob
+              Icon={AbortIcon}
+              label="Cancel"
+              voice={VOICE.cancel}
+              busy={busy === 'cancel'}
+              dimmed={offline}
+              result={resultFor('cancel')}
+              onPress={() => press('cancel')}
+            />
+          </View>
         </View>
 
-        {health?.capabilities?.firmwareReboot ? (
-          <Pressable
-            style={({ pressed }) => [
-              styles.firmwareButton,
-              agentUnreachable && styles.actionButtonDimmed,
-              pressed && styles.actionButtonPressed,
-            ]}
-            onPress={() => handlePress('firmware')}
-            disabled={busy === 'firmware'}
-            accessibilityRole="button"
-            accessibilityLabel="Reboot to BIOS"
-          >
-            {busy === 'firmware' ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <>
-                <ChipIcon size={19} color="#8A8F9C" strokeWidth={1.7} />
-                <Text style={styles.firmwareLabel}>Reboot to BIOS</Text>
-              </>
-            )}
-          </Pressable>
-        ) : null}
+        {health?.capabilities?.firmwareReboot && (
+          <ClayButton
+            label="Reboot to BIOS"
+            tone="quiet"
+            icon={ChipIcon}
+            voice={VOICE.firmware}
+            busy={busy === 'firmware'}
+            dimmed={offline}
+            onPress={() => press('firmware')}
+            style={styles.bios}
+          />
+        )}
 
-        {statusText && <Text style={styles.status}>{statusText}</Text>}
+        {message && (
+          <Text
+            style={[
+              styles.message,
+              { color: result && !result.ok ? theme.danger : theme.moss },
+            ]}
+          >
+            {message}
+          </Text>
+        )}
 
         <NetworkInfo device={device} health={health} latencyMs={latencyMs} status={status} route={route} />
 
-        <Text style={styles.footnote}>
-          {agentUnreachable
-            ? 'The agent isn’t answering, so this PC is off, asleep, or not running it. Only Start will work until it’s back.'
-            : 'Start uses Wake-on-LAN and only works while your phone is on the same Wi-Fi network as this PC (and Wake-on-LAN is enabled in its BIOS/network adapter settings).'}
+        <Text style={[styles.footnote, { color: theme.ink3 }]}>
+          {offline
+            ? 'The PC isn’t answering — it’s off, asleep, or not running the agent. Only Wake will do anything until it’s back.'
+            : 'Wake works over your own Wi-Fi only. A powered-off PC has nothing listening for anything else.'}
         </Text>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function labelFor(action: ActionKey) {
-  switch (action) {
-    case 'start':
-      return 'Start';
-    case 'shutdown':
-      return 'Shutdown';
-    case 'restart':
-      return 'Restart';
-    case 'sleep':
-      return 'Sleep';
-    case 'lock':
-      return 'Lock';
-    case 'cancel':
-      return 'Cancel';
-    case 'firmware':
-      return 'Reboot to BIOS';
-  }
-}
-
-function ActionButton({
-  Icon,
-  label,
-  onPress,
-  busy,
-  danger,
-  dimmed,
-}: {
-  Icon: React.ComponentType<IconProps>;
-  label: string;
-  onPress: () => void;
-  busy?: boolean;
-  danger?: boolean;
-  dimmed?: boolean;
-}) {
-  return (
-    <Pressable
-      style={({ pressed }) => [
-        styles.actionButton,
-        danger && styles.actionButtonDanger,
-        dimmed && styles.actionButtonDimmed,
-        pressed && styles.actionButtonPressed,
-      ]}
-      onPress={onPress}
-      disabled={busy}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-    >
-      {busy ? (
-        <ActivityIndicator color="#FFFFFF" style={styles.spinner} />
-      ) : (
-        <>
-          <Icon size={26} color={danger ? '#F2A9A0' : '#FFFFFF'} />
-          <Text style={styles.actionLabel}>{label}</Text>
-        </>
-      )}
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0F1115', paddingHorizontal: 20 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', paddingTop: 16 },
-  back: { color: '#3D7EFF', fontSize: 16 },
-  edit: { color: '#8A8F9C', fontSize: 16 },
-  scroll: { paddingBottom: 28 },
-  title: { color: '#FFFFFF', fontSize: 26, fontWeight: '700', marginTop: 16 },
-  subtitle: { color: '#8A8F9C', marginTop: 4 },
-  statusRow: { alignSelf: 'flex-start', paddingVertical: 10, marginBottom: 14 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  actionButton: {
-    width: '47%',
-    backgroundColor: '#1B1E27',
-    borderRadius: 16,
-    paddingVertical: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  actionButtonDanger: { backgroundColor: '#3A1E22' },
-  actionButtonDimmed: { opacity: 0.4 },
-  actionButtonPressed: { opacity: 0.7 },
-  firmwareButton: {
+  container: { flex: 1, paddingHorizontal: 18 },
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 9,
-    marginTop: 12,
-    paddingVertical: 14,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#2A2E3A',
+    justifyContent: 'space-between',
+    paddingTop: 14,
+    paddingBottom: 4,
   },
-  firmwareLabel: { color: '#8A8F9C', fontWeight: '600', fontSize: 14 },
-  spinner: { height: 26 },
-  actionLabel: { color: '#FFFFFF', fontWeight: '600' },
-  status: { color: '#5FD68C', marginTop: 18, textAlign: 'center' },
-  footnote: { color: '#5A5F6B', fontSize: 12, marginTop: 18, lineHeight: 18 },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  navText: { fontSize: 15.5, fontWeight: '700' },
+  scroll: { paddingBottom: 30 },
+
+  card: {
+    borderRadius: RADIUS.card,
+    paddingVertical: 17,
+    paddingHorizontal: 19,
+    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  cardText: { flex: 1, minWidth: 0 },
+  name: { fontSize: 21, fontWeight: '800', letterSpacing: -0.3 },
+  address: { fontSize: 12.5, fontWeight: '700', marginTop: 2 },
+
+  pill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    borderRadius: RADIUS.pill,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+  },
+  dot: { width: 8, height: 8, borderRadius: 4 },
+  pillText: { fontSize: 11.5, fontWeight: '800' },
+
+  uptime: { fontSize: 11.5, fontWeight: '700', textAlign: 'center', marginTop: 10 },
+
+  grid: { marginTop: 16, gap: 12 },
+  gridRow: { flexDirection: 'row', gap: 12 },
+
+  bios: { marginTop: 12 },
+  message: { fontSize: 13, fontWeight: '800', textAlign: 'center', marginTop: 16 },
+  footnote: { fontSize: 11.5, lineHeight: 17, fontWeight: '600', marginTop: 18 },
 });

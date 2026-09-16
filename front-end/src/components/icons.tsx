@@ -109,6 +109,16 @@ export function ChipIcon(props: IconProps) {
   );
 }
 
+export function GearIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <Circle cx="12" cy="12" r="3.3" />
+      <Path d="M12 2.5v2.2M12 19.3v2.2M21.5 12h-2.2M4.7 12H2.5" />
+      <Path d="M18.7 5.3l-1.6 1.6M6.9 17.1l-1.6 1.6M18.7 18.7l-1.6-1.6M6.9 6.9L5.3 5.3" />
+    </Icon>
+  );
+}
+
 export function HelpIcon(props: IconProps) {
   return (
     <Icon {...props}>

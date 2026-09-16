@@ -23,14 +23,10 @@ function buildPairingPayload(config) {
     mac: primary ? primary.mac.toUpperCase() : null,
   };
 
-  // A laptop on both Wi-Fi and Ethernet has a real second answer worth offering.
-  const alts = adapters.slice(1, 3).map((a) => ({
-    ip: a.ip,
-    mac: a.mac.toUpperCase(),
-    iface: a.interface,
-  }));
-  if (alts.length) payload.alts = alts;
-
+  // Deliberately not listing the other adapters here. They would add ~70
+  // characters, which pushes the QR up a version and makes it measurably
+  // harder for a phone to read across a desk -- and the app only ever uses the
+  // primary address anyway. They are printed as text instead.
   return payload;
 }
 
