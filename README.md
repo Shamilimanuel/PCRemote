@@ -33,18 +33,21 @@ phone to scan. No administrator rights needed.
 
 Run it again any time to upgrade — it keeps your token, so the phone stays paired.
 
+Partway through it asks whether you want a **Reboot to BIOS** button, explains
+exactly what saying yes grants, and carries on either way. That is the only part
+that needs administrator, and it is a question rather than an assumption — see
+[Rebooting into BIOS](#rebooting-into-bios).
+
 Options need the longer form, because `iex` can't take arguments:
 
 ```powershell
 $s = 'https://raw.githubusercontent.com/Shamilimanuel/PCRemote/main/setup.ps1'
 
-& ([scriptblock]::Create((irm $s))) -Uninstall    # remove it all
-& ([scriptblock]::Create((irm $s))) -Firmware     # also allow "Reboot to BIOS"
-& ([scriptblock]::Create((irm $s))) -NoAutoStart  # don't start at login
+& ([scriptblock]::Create((irm $s))) -Uninstall     # remove it all
+& ([scriptblock]::Create((irm $s))) -Firmware      # say yes without being asked
+& ([scriptblock]::Create((irm $s))) -NoFirmware    # skip the question
+& ([scriptblock]::Create((irm $s))) -NoAutoStart   # don't start at login
 ```
-
-`-Firmware` is the one step that asks for administrator, and it's opt-in. See
-[Rebooting into BIOS](#rebooting-into-bios).
 
 ### Doing it by hand instead
 
@@ -93,16 +96,22 @@ Power-on only works if Wake-on-LAN is enabled for your network adapter:
 
 ### Rebooting into BIOS
 
-Optional, and off by default. `shutdown /r /fw` restarts straight into the firmware
-settings screen, but it needs administrator rights -- which the agent deliberately does
-not have, since it listens on the network.
+Optional. The installer asks; `install-firmware-task.ps1` does the same thing on its own.
+
+`shutdown /r /fw` restarts straight into the firmware settings screen, but it needs
+administrator rights -- which the agent deliberately does not have, since it listens on
+the network.
 
 Rather than elevating the agent, `install-firmware-task.ps1` registers one elevated
 Scheduled Task that runs exactly that command and takes no arguments. The agent can ask
 Task Scheduler to start it but cannot change what it does, so the extra authority this
 grants -- even if the token leaked -- is "reboot to firmware" and nothing else.
 
-Requires UEFI. The app hides the button unless the agent reports the task is installed.
+Requires UEFI; the installer checks and skips the question on legacy BIOS machines.
+
+The app hides the button unless the agent reports the task is installed, and the Network
+panel says which it is -- an absent button is otherwise indistinguishable from a broken
+one.
 
 ## 2. Build the phone app
 
