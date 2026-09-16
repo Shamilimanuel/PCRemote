@@ -175,10 +175,16 @@ packets after an SDK bump, that dependency is the first place to look.
 
 ### Pairing a PC
 
-1. Open the app, tap **+ Add PC**.
-2. Enter a name, the IP address, port (`5533` by default), token, and MAC address shown
-   by the agent.
-3. Tap **Test connection** to confirm the phone can reach the agent, then **Save**.
+1. Open the app, tap **+ Add PC**. The **?** in the top corner explains the whole setup
+   if this is the first time — including the command to run on the PC.
+2. Tap **Scan code** and point the camera at the page `npm run pair` opened on the PC.
+   Every field fills itself in.
+3. Tap **Test connection**, then **Save**.
+
+The same page prints all five values in text underneath the code, so typing them in by
+hand is always available as a fallback. A scanned payload is validated field by field
+before it goes anywhere near storage — pointing the camera at some unrelated QR gives a
+clear "that isn't a Reveille code" rather than a half-filled form.
 
 ### Using it
 
@@ -260,7 +266,9 @@ Reveille/
 │   │   ├── server.js     Express routes + auth
 │   │   ├── commands.js   shutdown/restart/sleep/lock command mapping
 │   │   └── config.js     token + network info
+│   ├── pair.js           opens the pairing code in a browser
 │   ├── install-agent-task.ps1
+│   ├── install-firmware-task.ps1
 │   └── uninstall-agent-task.ps1
 ├── .github/workflows/
 │   └── android.yml   builds + signs the APK, publishes it to Releases
@@ -268,8 +276,8 @@ Reveille/
     ├── app.json          native permissions, cleartext HTTP, bundle IDs
     ├── App.tsx           screen switching + device state
     └── src/
-        ├── screens/      DeviceList, DeviceForm, Control
-        ├── components/   StatusPill, NetworkInfo, UpdateBanner, icons
+        ├── screens/      DeviceList, DeviceForm, Control, Scan
+        ├── components/   StatusPill, NetworkInfo, UpdateBanner, HelpSheet, icons
         ├── hooks/        useDeviceStatus (polls /health, measures latency)
         ├── widget/       home screen widget + its headless task handler
         ├── lib/          api.ts (HTTP calls), wol.ts (magic packet), storage.ts

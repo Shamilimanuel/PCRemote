@@ -109,6 +109,16 @@ export function ChipIcon(props: IconProps) {
   );
 }
 
+export function HelpIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <Circle cx="12" cy="12" r="9.5" />
+      <Path d="M9.2 9.3a2.9 2.9 0 0 1 5.6 1c0 1.9-2.8 2.4-2.8 4" />
+      <Line x1="12" y1="17.6" x2="12" y2="17.6" />
+    </Icon>
+  );
+}
+
 export function AlertIcon(props: IconProps) {
   return (
     <Icon {...props}>

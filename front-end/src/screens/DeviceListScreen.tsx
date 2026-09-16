@@ -28,7 +28,7 @@ export default function DeviceListScreen({ devices, onSelect, onAdd }: Props) {
         <View style={styles.empty}>
           <Text style={styles.emptyText}>No PCs added yet.</Text>
           <Text style={styles.emptySubtext}>
-            Run the agent on your PC, then tap "+ Add PC" and enter the details it prints out.
+            Tap "+ Add PC" to get started. There's a ? there if you haven't set the PC up yet.
           </Text>
         </View>
       ) : (

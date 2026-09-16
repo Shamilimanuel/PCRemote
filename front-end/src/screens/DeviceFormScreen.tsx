@@ -12,6 +12,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Device } from '../types/device';
 import { checkHealth } from '../lib/api';
+import { HelpIcon } from '../components/icons';
+import HelpSheet from '../components/HelpSheet';
 
 type Props = {
   initial?: Device;
@@ -35,6 +37,7 @@ export default function DeviceFormScreen({ initial, isNew, onScan, onSave, onCan
   const [mac, setMac] = useState(initial?.mac ?? '');
   const [remoteHost, setRemoteHost] = useState(initial?.remoteHost ?? '');
   const [testing, setTesting] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   // A scan returns to this screen with fresh `initial` values; without this the
   // fields would keep whatever was typed before the camera opened.
@@ -84,10 +87,23 @@ export default function DeviceFormScreen({ initial, isNew, onScan, onSave, onCan
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <ScrollView contentContainerStyle={styles.scroll}>
-        <Text style={styles.title}>{initial ? 'Edit PC' : 'Add PC'}</Text>
+        <View style={styles.titleRow}>
+          <Text style={styles.title}>{initial ? 'Edit PC' : 'Add PC'}</Text>
+          <Pressable
+            style={styles.helpButton}
+            onPress={() => setHelpOpen(true)}
+            hitSlop={12}
+            accessibilityRole="button"
+            accessibilityLabel="How to add your PC"
+          >
+            <HelpIcon size={22} color="#8A8F9C" strokeWidth={1.8} />
+          </Pressable>
+        </View>
+
         <Text style={styles.hint}>
-          On the PC, run <Text style={styles.mono}>npm run pair</Text> in the agent folder. It opens
-          a code you can scan — or read the values off it and type them in.
+          {isNew
+            ? 'Scan the code your PC shows, or type the five values in by hand. Tap ? above if you haven\u2019t set the PC up yet.'
+            : 'These came from the pairing code your PC showed. Change them only if its address moved.'}
         </Text>
 
         {isNew && onScan && (
@@ -151,6 +167,12 @@ export default function DeviceFormScreen({ initial, isNew, onScan, onSave, onCan
           </Pressable>
         )}
       </ScrollView>
+
+      <HelpSheet
+        visible={helpOpen}
+        onClose={() => setHelpOpen(false)}
+        onScan={isNew ? onScan : undefined}
+      />
     </SafeAreaView>
   );
 }
@@ -183,7 +205,14 @@ function Field(props: {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0F1115' },
   scroll: { padding: 20, gap: 4 },
-  title: { fontSize: 24, fontWeight: '700', color: '#FFFFFF', marginBottom: 6 },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  title: { fontSize: 24, fontWeight: '700', color: '#FFFFFF' },
+  helpButton: { padding: 4 },
   hint: { color: '#8A8F9C', marginBottom: 16, lineHeight: 20 },
   mono: { color: '#FFFFFF', fontFamily: 'monospace' },
   scanButton: {
