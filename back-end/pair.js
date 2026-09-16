@@ -122,6 +122,10 @@ function buildPage(payload, adapters, svg) {
     ${row('MAC address', payload.mac)}
   </table>
   ${others ? `<p class="note" style="text-align:left;margin-bottom:6px">Other adapters on this PC:</p><ul>${others}</ul>` : ''}
+  <p class="sub" style="margin-top:22px">
+    No Android phone? Open <b>http://${escape(payload.ip)}:${escape(payload.port)}</b> in any
+    browser instead — same buttons, nothing to install.
+  </p>
   <div class="warn">
     That token is the password to this PC. Anyone on your network who has it can
     shut the machine down. Don't photograph this page for someone else, and close
@@ -187,6 +191,7 @@ async function main() {
   console.log(rule('├', '┤', '─'));
   console.log('');
   field('Get the app', APP_URL, green);
+  field('Or a browser', `http://${payload.ip}:${payload.port}`, green);
 
   const svg = await QRCode.toString(data, { type: 'svg', errorCorrectionLevel: 'M', margin: 1 });
   const file = path.join(os.tmpdir(), 'reveille-pairing.html');

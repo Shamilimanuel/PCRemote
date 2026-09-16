@@ -1,4 +1,5 @@
 const os = require('os');
+const path = require('path');
 const crypto = require('crypto');
 const express = require('express');
 const {
@@ -20,9 +21,28 @@ function timingSafeEqual(a, b) {
   return crypto.timingSafeEqual(bufA, bufB);
 }
 
+// The same buttons as the phone app, for anything with a browser. An iPhone
+// cannot install an APK and Apple offers no equivalent, so a web page is the
+// only route onto one that does not involve a paid developer account.
+//
+// Served without a token: it contains no secrets, and asking for one before
+// handing over the login form would be circular. Every request it then makes
+// carries the token like any other client.
+const WEB_ROOT = path.join(__dirname, '..', 'web');
+
 function createServer(config) {
   const app = express();
   app.use(express.json());
+
+  app.use(
+    express.static(WEB_ROOT, {
+      index: 'index.html',
+      // The page changes only when the agent is updated, and a stale one would
+      // be confusing to debug.
+      etag: true,
+      maxAge: 0,
+    })
+  );
 
   function requireAuth(req, res, next) {
     const header = req.get('authorization') || '';

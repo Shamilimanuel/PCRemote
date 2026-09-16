@@ -213,6 +213,26 @@ agent's `/health` endpoint (tap the dot on the control screen to re-check immedi
 "Offline" just means the agent didn't answer — the PC is off, asleep, or not running it —
 so the actions that need the agent are dimmed and only **Start** is expected to work.
 
+## Using it from a browser
+
+The agent serves the same controls as a web page on its own port. Open
+`http://<pc-ip>:5533` from anything on your network — iPhone, iPad, a laptop — and
+it works with no install at all.
+
+This exists because **an iPhone cannot install an APK**, and Apple offers no
+equivalent: the only routes onto one are the App Store or TestFlight, both of which
+need a paid developer account. A web page needs none of that.
+
+The page asks for the token once and keeps it in that browser. On iOS, *Share →
+Add to Home Screen* gives it an icon and its own window, so it behaves like an app.
+
+**Wake is not there.** Browsers aren't allowed to broadcast on the network, which
+is what a wake signal is — the same restriction that makes Wake hard on iOS
+generally. Everything else works: shut down, restart, sleep, lock, cancel, the
+timer, vitals and the network panel.
+
+It follows the browser's language the way the app follows the phone's.
+
 ## Home screen widget
 
 Long-press the home screen, pick **Widgets**, and drag **Reveille** out. It shows the
@@ -284,6 +304,7 @@ Reveille/
 │   │   ├── server.js     Express routes + auth
 │   │   ├── commands.js   shutdown/restart/sleep/lock command mapping
 │   │   └── config.js     token + network info
+│   ├── web/              the browser version of the app
 │   ├── pair.js           opens the pairing code in a browser
 │   ├── install-agent-task.ps1
 │   ├── install-firmware-task.ps1
