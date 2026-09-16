@@ -37,19 +37,27 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Set version code from the run number
-        # Android refuses to install an APK whose version code is lower than the
-        # installed one, so derive it from the run number instead of hand-editing
-        # app.json for every build. Starts above the last EAS build (2).
+      - name: Set the version from the run number
+        # Android tracks two numbers and they do different jobs:
+        #
+        #   versionCode  an integer it compares to decide whether an APK is
+        #                an update. Never shown to anyone.
+        #   version      the name it shows in app info and in the app.
+        #
+        # Only the first was being set, so every build installed correctly
+        # and then reported itself as 1.0.0 -- indistinguishable from an
+        # update that never happened.
         run: |
           node -e "
             const fs = require('fs');
             const cfg = JSON.parse(fs.readFileSync('app.json', 'utf8'));
-            const code = 100 + Number(process.env.GITHUB_RUN_NUMBER);
+            const run = Number(process.env.GITHUB_RUN_NUMBER);
+            const code = 100 + run;
+            cfg.expo.version = '1.0.' + run;
             cfg.expo.android.versionCode = code;
             cfg.expo.ios.buildNumber = String(code);
             fs.writeFileSync('app.json', JSON.stringify(cfg, null, 2) + '\n');
-            console.log('versionCode =', code);
+            console.log('version = ' + cfg.expo.version + '  versionCode = ' + code);
           "
 
       - name: Generate the native Android project
