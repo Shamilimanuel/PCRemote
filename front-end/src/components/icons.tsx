@@ -144,3 +144,52 @@ export function AlertIcon(props: IconProps) {
     </Icon>
   );
 }
+
+/**
+ * The machine icons, for telling one saved device from another at a glance.
+ *
+ * Shape only, never an operating system: a laptop running Linux is still a
+ * laptop, and an icon that claimed otherwise would be wrong half the time. The
+ * OS is a separate thing the agent reports.
+ */
+
+export function DesktopIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <Rect x="3.5" y="4" width="17" height="11.5" rx="1.6" />
+      <Line x1="9" y1="19.5" x2="15" y2="19.5" />
+      <Line x1="12" y1="15.5" x2="12" y2="19.5" />
+    </Icon>
+  );
+}
+
+export function LaptopIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <Path d="M5.5 5.5h13v9h-13z" />
+      <Path d="M2.5 18.5h19" />
+      <Path d="M4 14.5 2.5 18.5M20 14.5l1.5 4" />
+    </Icon>
+  );
+}
+
+export function ServerIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <Rect x="3.5" y="3.5" width="17" height="7" rx="1.5" />
+      <Rect x="3.5" y="13.5" width="17" height="7" rx="1.5" />
+      <Line x1="7" y1="7" x2="7" y2="7" />
+      <Line x1="7" y1="17" x2="7" y2="17" />
+    </Icon>
+  );
+}
+
+export function MiniPcIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <Rect x="5.5" y="6.5" width="13" height="11" rx="2" />
+      <Line x1="9" y1="10.5" x2="9" y2="10.5" />
+      <Line x1="9" y1="13.5" x2="15" y2="13.5" />
+    </Icon>
+  );
+}

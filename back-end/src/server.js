@@ -14,6 +14,7 @@ const {
 const { getPrimaryNetworkInfo } = require('./config');
 const { collect } = require('./stats');
 const updates = require('./updates');
+const platform = require('./platform');
 
 function timingSafeEqual(a, b) {
   const bufA = Buffer.from(a);
@@ -66,7 +67,11 @@ function createServer(config) {
       // Read live rather than at boot: DHCP can hand out a new address, and a
       // laptop can move between Wi-Fi and Ethernet, while the agent keeps running.
       interfaces: getPrimaryNetworkInfo(),
-      // Lets the app hide buttons for things this PC isn't set up to do.
+      // Which OS this is, in the app's own vocabulary rather than Node's --
+      // 'windows' | 'macos' | 'linux'. Absent on agents older than this, which
+      // the app reads as Windows, because that is all there was.
+      os: platform.PLATFORM,
+      // Lets the app hide buttons for things this machine isn't set up to do.
       capabilities: {
         firmwareReboot: await hasFirmwareTask(),
         timedShutdown: true,

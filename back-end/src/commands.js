@@ -1,4 +1,5 @@
 const { exec } = require('child_process');
+const { PLATFORM, current, isSupported, supportsFirmware } = require('./platform');
 
 // A short delay by default so the HTTP response reaches the phone before the
 // OS starts tearing the network stack down.
@@ -8,17 +9,8 @@ const DEFAULT_DELAY_SECONDS = 5;
 // the value somewhere Windows will actually accept.
 const MAX_DELAY_SECONDS = 7200;
 
-const TIMED = {
-  shutdown: '/s',
-  restart: '/r',
-};
-
-const IMMEDIATE = {
-  sleep: 'rundll32.exe powrprof.dll,SetSuspendState 0,1,0',
-  lock: 'rundll32.exe user32.dll,LockWorkStation',
-};
-
-const CANCEL_COMMAND = 'shutdown /a';
+const TIMED_ACTIONS = ['shutdown', 'restart'];
+const IMMEDIATE_ACTIONS = ['sleep', 'lock'];
 
 /**
  * Rebooting into the firmware screen (`shutdown /r /fw`) needs administrator
@@ -36,11 +28,15 @@ const FIRMWARE_ACTION = 'firmware';
 /**
  * What the agent last scheduled, so the app can show a countdown.
  *
- * Windows has no reliable way to ask "is a shutdown pending", so this is the
- * agent remembering what it did. It is forgotten if the agent restarts, which
- * is honest -- `shutdown /a` still works either way.
+ * On Windows this is the agent remembering what it asked the OS to do -- there
+ * is no reliable way to ask "is a shutdown pending". Everywhere else the timer
+ * below *is* the pending shutdown, because those platforms have no equivalent
+ * of `shutdown /t` that works without root.
+ *
+ * Either way it is forgotten if the agent restarts, which is honest.
  */
 let pending = null;
+let timer = null;
 
 function getPending() {
   if (pending && pending.atMs <= Date.now()) pending = null;
@@ -48,14 +44,11 @@ function getPending() {
 }
 
 function isValidAction(action) {
-  return (
-    action === FIRMWARE_ACTION ||
-    Object.prototype.hasOwnProperty.call(TIMED, action) ||
-    Object.prototype.hasOwnProperty.call(IMMEDIATE, action)
-  );
+  if (action === FIRMWARE_ACTION) return supportsFirmware();
+  return TIMED_ACTIONS.includes(action) || IMMEDIATE_ACTIONS.includes(action);
 }
 
-/** Clamps whatever the app asked for into something Windows will take. */
+/** Clamps whatever the app asked for into something the OS will take. */
 function normalizeDelay(seconds) {
   const value = Number(seconds);
   if (!Number.isFinite(value)) return DEFAULT_DELAY_SECONDS;
@@ -64,6 +57,8 @@ function normalizeDelay(seconds) {
 
 /** Whether the elevated task has been installed, so the app can hide the button. */
 function hasFirmwareTask() {
+  // No point spawning schtasks on a machine that has never had it.
+  if (!supportsFirmware()) return Promise.resolve(false);
   return new Promise((resolve) => {
     exec(`schtasks /query /tn "${FIRMWARE_TASK}"`, { windowsHide: true }, (error) => resolve(!error));
   });
@@ -92,18 +87,46 @@ function shell(command) {
   });
 }
 
-async function runAction(action, options = {}) {
-  if (action === FIRMWARE_ACTION) return runFirmwareReboot();
+function clearTimer() {
+  if (timer) {
+    clearTimeout(timer);
+    timer = null;
+  }
+}
 
-  if (IMMEDIATE[action]) {
-    return shell(IMMEDIATE[action]);
+async function runAction(action, options = {}) {
+  if (!isSupported()) {
+    throw new Error(`Reveille has no commands for ${process.platform}.`);
+  }
+  if (action === FIRMWARE_ACTION) {
+    if (!supportsFirmware()) throw new Error('Reboot to BIOS is a Windows-only feature.');
+    return runFirmwareReboot();
   }
 
-  const flag = TIMED[action];
-  if (!flag) throw new Error(`Unknown action: ${action}`);
+  if (IMMEDIATE_ACTIONS.includes(action)) {
+    return shell(current[action]);
+  }
+  if (!TIMED_ACTIONS.includes(action)) throw new Error(`Unknown action: ${action}`);
 
   const delay = normalizeDelay(options.delaySeconds ?? DEFAULT_DELAY_SECONDS);
-  const result = await shell(`shutdown ${flag} /t ${delay}`);
+  const command = current[action](delay);
+
+  // Only one countdown at a time; a second request replaces the first.
+  clearTimer();
+
+  let result;
+  if (current.schedulesItself) {
+    result = await shell(command);
+  } else {
+    // The OS cannot take a delay without root here, so the agent holds it.
+    // Scheduled, not run -- so the reply reaches the phone either way.
+    timer = setTimeout(() => {
+      timer = null;
+      pending = null;
+      shell(command).catch(() => {});
+    }, delay * 1000);
+    result = { stdout: '', stderr: '' };
+  }
 
   pending = {
     action,
@@ -115,8 +138,10 @@ async function runAction(action, options = {}) {
 
 async function cancelPendingShutdown() {
   pending = null;
+  clearTimer();
+  if (!current || !current.cancel) return;
   // Fails harmlessly if nothing was scheduled; that isn't an error.
-  await shell(CANCEL_COMMAND).catch(() => {});
+  await shell(current.cancel).catch(() => {});
 }
 
 module.exports = {
