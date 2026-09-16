@@ -35,7 +35,7 @@ export default function DeviceFormScreen({
   onCancel,
   onDelete,
 }: Props) {
-  const { theme } = useTheme();
+  const { theme, t } = useTheme();
   const { show } = useDialog();
   const [name, setName] = useState(initial?.name ?? '');
   const [ip, setIp] = useState(initial?.ip ?? '');
@@ -82,11 +82,11 @@ export default function DeviceFormScreen({
       successFeedback();
       show({
         tone: 'good',
-        title: 'Connected',
-        message: 'Your PC answered. Tap Save to keep it.',
+        title: t.connected,
+        message: t.connectedBody,
       });
     } catch (err) {
-      const { title, message } = explain(err, 'reach');
+      const { title, message } = explain(err, t, 'reach');
       play('fail');
       failureFeedback();
       show({ tone: 'bad', title, message });
@@ -100,91 +100,101 @@ export default function DeviceFormScreen({
       style={[styles.container, { backgroundColor: theme.ground }]}
       edges={['top', 'bottom']}
     >
+      <View style={styles.nav}>
+        <Pressable
+          onPress={() => {
+            play('cancel');
+            tapFeedback();
+            onCancel();
+          }}
+          hitSlop={14}
+          accessibilityRole="button"
+          accessibilityLabel={t.back}
+        >
+          <Text style={[styles.navBack, { color: theme.dusk }]}>{t.back}</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => {
+            play('tap');
+            tapFeedback();
+            setHelpOpen(true);
+          }}
+          hitSlop={14}
+          accessibilityRole="button"
+          accessibilityLabel={t.helpTitle}
+        >
+          <HelpIcon size={24} color={theme.ink3} strokeWidth={1.9} />
+        </Pressable>
+      </View>
+
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <View style={styles.titleRow}>
-          <Text style={[styles.title, { color: theme.ink }]}>{initial?.id ? 'Edit PC' : 'Add PC'}</Text>
-          <Pressable
-            onPress={() => {
-              play('tap');
-              tapFeedback();
-              setHelpOpen(true);
-            }}
-            hitSlop={14}
-            accessibilityRole="button"
-            accessibilityLabel="How to add your PC"
-          >
-            <HelpIcon size={24} color={theme.ink3} strokeWidth={1.9} />
-          </Pressable>
-        </View>
+        <Text style={[styles.title, { color: theme.ink }]}>{initial?.id ? t.editPcTitle : t.addPcTitle}</Text>
 
         <Text style={[styles.hint, { color: theme.ink3 }]}>
-          {isNew
-            ? 'Scan the code your PC shows, or type the values in by hand. Tap ? above if you haven’t set the PC up yet.'
-            : 'These came from the pairing code your PC showed. Change them only if its address moved.'}
+          {isNew ? t.addHint : t.editHint}
         </Text>
 
         {isNew && onScan && (
-          <ClayButton label="Scan code" tone="accent" onPress={onScan} style={styles.scan} />
+          <ClayButton label={t.scanCode} tone="accent" onPress={onScan} style={styles.scan} />
         )}
 
-        <Field label="Name" value={name} onChangeText={setName} placeholder="e.g. Office PC" />
+        <Field label={t.name} value={name} onChangeText={setName} placeholder={t.namePlaceholder} />
         <Field
-          label="IP address"
+          label={t.ipAddress}
           value={ip}
           onChangeText={setIp}
           placeholder="10.0.0.25"
           keyboardType="numbers-and-punctuation"
         />
         <Field
-          label="Port"
+          label={t.port}
           value={port}
           onChangeText={setPort}
           placeholder="5533"
           keyboardType="number-pad"
         />
         <Field
-          label="Token"
+          label={t.tokenLabel}
           value={token}
           onChangeText={setToken}
-          placeholder="the long code from your PC"
+          placeholder={t.tokenPlaceholder}
         />
         <Field
-          label="MAC address"
+          label={t.macAddress}
           value={mac}
           onChangeText={setMac}
           placeholder="AA:BB:CC:DD:EE:FF"
           autoCapitalize="characters"
         />
         <Field
-          label="Remote address (optional)"
+          label={t.remoteAddress}
           value={remoteHost}
           onChangeText={setRemoteHost}
           placeholder="e.g. desktop.tail1234.ts.net"
         />
         <Text style={[styles.fieldHint, { color: theme.ink3 }]}>
-          Only used when the address above can’t be reached — lets shut down, sleep and lock work
-          away from home. Leave it empty if you only use this on your own Wi-Fi.
+          {t.remoteHint}
         </Text>
 
         <ClayButton
-          label="Test connection"
+          label={t.testConnection}
           onPress={handleTest}
           busy={testing}
           dimmed={!canSave}
           style={styles.action}
         />
         <ClayButton
-          label="Save"
+          label={t.save}
           tone="accent"
           onPress={() => canSave && onSave(buildDevice())}
           dimmed={!canSave}
           style={styles.action}
         />
-        <ClayButton label="Cancel" tone="quiet" onPress={onCancel} style={styles.action} />
+        <ClayButton label={t.cancel} tone="quiet" onPress={onCancel} style={styles.action} />
 
         {onDelete && (
           <ClayButton
-            label="Remove this PC"
+            label={t.removeThisPc}
             tone="danger"
             voice="fail"
             onPress={onDelete}
@@ -230,14 +240,16 @@ function Field(props: {
 
 const styles = StyleSheet.create({
   container: { flex: 1, paddingHorizontal: 20 },
-  scroll: { paddingTop: 12, paddingBottom: 36 },
-  titleRow: {
+  nav: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 6,
+    paddingTop: 14,
+    paddingBottom: 2,
   },
-  title: { fontSize: 28, fontWeight: '800', letterSpacing: -0.4 },
+  navBack: { fontSize: 15.5, fontWeight: '700' },
+  scroll: { paddingTop: 10, paddingBottom: 36 },
+  title: { fontSize: 28, fontWeight: '800', letterSpacing: -0.4, marginBottom: 6 },
   hint: { fontSize: 13.5, lineHeight: 20, fontWeight: '600', marginBottom: 18 },
   scan: { marginBottom: 22 },
 

@@ -81,7 +81,8 @@
           ]
         }
       ],
-      "expo-audio"
+      "expo-audio",
+      "expo-localization"
     ]
   }
 }

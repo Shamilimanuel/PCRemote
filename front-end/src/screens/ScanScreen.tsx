@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions, BarcodeScanningResult } from 'expo-camera';
 import { Device } from '../types/device';
 import { parsePairingPayload } from '../lib/pairing';
+import { useTheme } from '../theme/ThemeContext';
 
 type Props = {
   onScanned: (device: Omit<Device, 'id'>) => void;
@@ -11,6 +12,7 @@ type Props = {
 };
 
 export default function ScanScreen({ onScanned, onCancel }: Props) {
+  const { t } = useTheme();
   const [permission, requestPermission] = useCameraPermissions();
   const [problem, setProblem] = useState<string | null>(null);
   // The camera fires continuously while a code is in frame, so latch after the
@@ -31,7 +33,7 @@ export default function ScanScreen({ onScanned, onCancel }: Props) {
   }
 
   if (!permission) {
-    return <Shell onCancel={onCancel} title="Scan code" body="Starting the camera…" />;
+    return <Shell onCancel={onCancel} title={t.scanTitle} body={t.scanStarting} />;
   }
 
   if (!permission.granted) {
@@ -39,14 +41,12 @@ export default function ScanScreen({ onScanned, onCancel }: Props) {
     return (
       <Shell
         onCancel={onCancel}
-        title="Scan code"
+        title={t.scanTitle}
         body={
-          blocked
-            ? 'Reveille needs the camera to read the pairing code, and permission was turned off. You can switch it back on in Settings.'
-            : 'Reveille needs the camera to read the pairing code from your PC. Nothing is recorded or sent anywhere.'
+          blocked ? t.scanPermissionBlocked : t.scanPermission
         }
         action={{
-          label: blocked ? 'Open settings' : 'Allow camera',
+          label: blocked ? t.openSettings : t.allowCamera,
           onPress: blocked ? () => Linking.openSettings() : requestPermission,
         }}
       />
@@ -57,11 +57,11 @@ export default function ScanScreen({ onScanned, onCancel }: Props) {
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <View style={styles.header}>
         <Pressable onPress={onCancel} hitSlop={10}>
-          <Text style={styles.back}>{'< Back'}</Text>
+          <Text style={styles.back}>{t.back}</Text>
         </Pressable>
       </View>
 
-      <Text style={styles.title}>Scan code</Text>
+      <Text style={styles.title}>{t.scanTitle}</Text>
       <Text style={styles.hint}>
         On your PC, run <Text style={styles.mono}>npm run pair</Text> in the agent folder. Point the
         camera at the code it opens.
@@ -80,11 +80,11 @@ export default function ScanScreen({ onScanned, onCancel }: Props) {
       {problem ? (
         <Text style={styles.problem}>{problem}</Text>
       ) : (
-        <Text style={styles.waiting}>Looking for a code…</Text>
+        <Text style={styles.waiting}>{t.scanLooking}</Text>
       )}
 
       <Pressable style={styles.manual} onPress={onCancel}>
-        <Text style={styles.manualText}>Type it in instead</Text>
+        <Text style={styles.manualText}>{t.scanTypeInstead}</Text>
       </Pressable>
     </SafeAreaView>
   );
@@ -101,11 +101,12 @@ function Shell({
   action?: { label: string; onPress: () => void };
   onCancel: () => void;
 }) {
+  const { t } = useTheme();
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <View style={styles.header}>
         <Pressable onPress={onCancel} hitSlop={10}>
-          <Text style={styles.back}>{'< Back'}</Text>
+          <Text style={styles.back}>{t.back}</Text>
         </Pressable>
       </View>
       <View style={styles.centre}>

@@ -38,7 +38,7 @@ const MARK: Record<Tone, string> = {
 };
 
 export function DialogProvider({ children }: { children: React.ReactNode }) {
-  const { theme } = useTheme();
+  const { theme, t } = useTheme();
   const [request, setRequest] = useState<DialogRequest | null>(null);
 
   const show = useCallback((next: DialogRequest) => {
@@ -81,7 +81,7 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
                 />
               )}
               <ClayButton
-                label={request?.confirmLabel ?? 'OK'}
+                label={request?.confirmLabel ?? t.ok}
                 tone={request?.destructive ? 'danger' : 'accent'}
                 voice={request?.destructive ? 'shutdown' : 'tap'}
                 onPress={() => {

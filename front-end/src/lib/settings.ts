@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ThemeName } from '../theme/clay';
+import { LanguageChoice } from '../i18n';
 
 export type ConfirmStyle = 'dialog' | 'hold' | 'off';
 
@@ -18,6 +19,8 @@ export type Settings = {
   confirmStyle: ConfirmStyle;
   /** Seconds between health polls. 0 turns polling off to save battery. */
   pollSeconds: number;
+  /** 'system' follows the phone, which is what most people want. */
+  language: LanguageChoice;
 };
 
 export const DEFAULTS: Settings = {
@@ -26,6 +29,7 @@ export const DEFAULTS: Settings = {
   haptics: true,
   confirmStyle: 'hold',
   pollSeconds: 10,
+  language: 'system',
 };
 
 /** How long a hold-to-confirm press must last. */

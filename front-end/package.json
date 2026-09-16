@@ -11,6 +11,7 @@
     "expo-camera": "~57.0.5",
     "expo-dev-client": "~57.0.19",
     "expo-haptics": "~57.0.3",
+    "expo-localization": "~57.0.2",
     "expo-status-bar": "~57.0.1",
     "expo-system-ui": "~57.0.4",
     "react": "19.2.3",

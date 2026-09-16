@@ -12,12 +12,12 @@ import { ClayButton } from './Clay';
  * delay costs nothing, and Cancel already aborts whatever is counting down.
  */
 
-export const DELAY_CHOICES = [
-  { label: 'Now', seconds: 5 },
-  { label: 'In 15 minutes', seconds: 15 * 60 },
-  { label: 'In 30 minutes', seconds: 30 * 60 },
-  { label: 'In an hour', seconds: 60 * 60 },
-  { label: 'In two hours', seconds: 120 * 60 },
+export const DELAY_CHOICES: { key: 'now' | 'in15' | 'in30' | 'in60' | 'in120'; seconds: number }[] = [
+  { key: 'now', seconds: 5 },
+  { key: 'in15', seconds: 15 * 60 },
+  { key: 'in30', seconds: 30 * 60 },
+  { key: 'in60', seconds: 60 * 60 },
+  { key: 'in120', seconds: 120 * 60 },
 ];
 
 type Props = {
@@ -29,22 +29,22 @@ type Props = {
 };
 
 export default function TimerSheet({ visible, verb, onPick, onClose }: Props) {
-  const { theme } = useTheme();
+  const { theme, t } = useTheme();
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.backdrop}>
         <View style={[styles.card, raised(theme), { backgroundColor: theme.clayHi }]}>
-          <Text style={[styles.title, { color: theme.ink }]}>{verb} when?</Text>
+          <Text style={[styles.title, { color: theme.ink }]}>{t.shutDownWhen(verb)}</Text>
           <Text style={[styles.hint, { color: theme.ink2 }]}>
-            You can call it off at any point with Cancel.
+            {t.timerHint}
           </Text>
 
           <View style={styles.choices}>
             {DELAY_CHOICES.map((choice) => (
               <ClayButton
                 key={choice.seconds}
-                label={choice.label}
+                label={t[choice.key]}
                 tone={choice.seconds <= 5 ? 'danger' : 'plain'}
                 voice={choice.seconds <= 5 ? 'shutdown' : 'tap'}
                 onPress={() => {
@@ -56,7 +56,7 @@ export default function TimerSheet({ visible, verb, onPick, onClose }: Props) {
             ))}
           </View>
 
-          <ClayButton label="Never mind" tone="quiet" voice="cancel" onPress={onClose} style={styles.choice} />
+          <ClayButton label={t.neverMind} tone="quiet" voice="cancel" onPress={onClose} style={styles.choice} />
         </View>
       </View>
     </Modal>
