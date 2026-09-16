@@ -57,11 +57,15 @@ export type MachineStats = {
 };
 
 /**
- * 'unknown' is the state before the first poll comes back; the agent only
- * answers while the PC is awake, so 'offline' covers off, asleep and
- * unreachable alike.
+ * 'unknown' is the state before the first poll comes back. 'offline' covers
+ * off, asleep and unreachable alike -- from here they look the same.
+ *
+ * 'locked' is the gap in between: the PC is powered on and answering, but
+ * nobody has logged in yet, so the agent is not running and none of the
+ * controls will work. Only PCs set up with install-presence-task.ps1 can
+ * report it; on every other PC that stretch still reads as 'offline'.
  */
-export type DeviceStatus = 'unknown' | 'online' | 'offline';
+export type DeviceStatus = 'unknown' | 'online' | 'locked' | 'offline';
 
 /** Which address answered — shown so you can tell home from away. */
 export type Route = 'local' | 'remote';

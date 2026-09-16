@@ -34,6 +34,11 @@ export type ClayTheme = {
   duskDeep: string;
   /** Awake. */
   moss: string;
+  /**
+   * On, but not logged in yet -- the lock screen. Deliberately not moss: the
+   * PC is there, and none of the buttons will reach it until someone signs in.
+   */
+  waking: string;
   danger: string;
   /** The two shadow colours the recipe is built from. */
   shadow: string;
@@ -57,6 +62,7 @@ export const THEMES: Record<ThemeName, ClayTheme> = {
     dusk: '#7B6BE8',
     duskDeep: '#5A48CF',
     moss: '#3FA97B',
+    waking: '#C9862B',
     danger: '#DB4A66',
     shadow: 'rgba(122,104,172,0.38)',
     shine: 'rgba(255,255,255,0.92)',
@@ -76,6 +82,7 @@ export const THEMES: Record<ThemeName, ClayTheme> = {
     dusk: '#A48BFF',
     duskDeep: '#7C63E0',
     moss: '#68D6A4',
+    waking: '#E9B571',
     danger: '#FF8099',
     shadow: 'rgba(0,0,0,0.50)',
     shine: 'rgba(255,255,255,0.075)',
@@ -95,6 +102,7 @@ export const THEMES: Record<ThemeName, ClayTheme> = {
     dusk: '#5D8BFF',
     duskDeep: '#3D66E0',
     moss: '#4FD69A',
+    waking: '#E8B15C',
     danger: '#FF6B84',
     shadow: 'rgba(0,0,0,0.62)',
     shine: 'rgba(255,255,255,0.055)',
