@@ -9,6 +9,7 @@ import {
 import { useTheme } from '../theme/ThemeContext';
 import { THEMES, ThemeName, RADIUS, raised, sunken, filled } from '../theme/clay';
 import { POLL_CHOICES, ConfirmStyle } from '../lib/settings';
+import { LANGUAGE_NAMES, LanguageChoice, deviceLanguage } from '../i18n';
 import { Surface, ClaySwitch, ClayButton } from '../components/Clay';
 import { play } from '../lib/sound';
 import { successFeedback, failureFeedback, tapFeedback } from '../lib/haptics';
@@ -16,20 +17,20 @@ import { successFeedback, failureFeedback, tapFeedback } from '../lib/haptics';
 const ORDER: ThemeName[] = ['dawn', 'dusk', 'midnight'];
 
 export default function SettingsScreen({ onBack }: { onBack: () => void }) {
-  const { theme, settings, update } = useTheme();
+  const { theme, settings, update, t } = useTheme();
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.ground }]} edges={['top', 'bottom']}>
       <View style={styles.header}>
         <Pressable onPress={onBack} hitSlop={12}>
-          <Text style={[styles.back, { color: theme.dusk }]}>{'‹ Back'}</Text>
+          <Text style={[styles.back, { color: theme.dusk }]}>{t.back}</Text>
         </Pressable>
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Text style={[styles.title, { color: theme.ink }]}>Settings</Text>
+        <Text style={[styles.title, { color: theme.ink }]}>{t.settings}</Text>
 
-        <Label>Theme</Label>
+        <Label>{t.theme}</Label>
         <View style={styles.themeRow}>
           {ORDER.map((name) => {
             const t = THEMES[name];
@@ -64,30 +65,30 @@ export default function SettingsScreen({ onBack }: { onBack: () => void }) {
           })}
         </View>
 
-        <Label>Feedback</Label>
+        <Label>{t.feedback}</Label>
         <Row
-          title="Sound"
-          hint="A tone for every action"
-          right={<ClaySwitch value={settings.sound} onChange={(v) => update({ sound: v })} label="Sound" />}
+          title={t.sound}
+          hint={t.soundHint}
+          right={<ClaySwitch value={settings.sound} onChange={(v) => update({ sound: v })} label={t.sound} />}
         />
         <Row
-          title="Vibration"
-          hint="Works with the volume down"
+          title={t.vibration}
+          hint={t.vibrationHint}
           right={
-            <ClaySwitch value={settings.haptics} onChange={(v) => update({ haptics: v })} label="Vibration" />
+            <ClaySwitch value={settings.haptics} onChange={(v) => update({ haptics: v })} label={t.vibration} />
           }
         />
 
-        <Label>Safety</Label>
+        <Label>{t.safety}</Label>
         <Row
-          title="Before shutting down"
-          hint="Also covers restart and BIOS"
+          title={t.beforeShutdown}
+          hint={t.beforeShutdownHint}
           right={
             <View style={styles.segment}>
               {([
-                ['hold', 'Hold'],
-                ['dialog', 'Ask'],
-                ['off', 'Off'],
+                ['hold', t.hold],
+                ['dialog', t.ask],
+                ['off', t.off],
               ] as [ConfirmStyle, string][]).map(([value, label]) => {
                 const selected = settings.confirmStyle === value;
                 return (
@@ -113,16 +114,16 @@ export default function SettingsScreen({ onBack }: { onBack: () => void }) {
         />
         <Text style={[styles.rowNote, { color: theme.ink3 }]}>
           {settings.confirmStyle === 'hold'
-            ? 'Press and hold the button until it fills. Let go early and nothing happens.'
+            ? t.holdNote
             : settings.confirmStyle === 'dialog'
-            ? 'A panel asks you to confirm first.'
-            : 'Shutdown fires the moment you tap it.'}
+            ? t.askNote
+            : t.offNote}
         </Text>
 
-        <Label>Check the PC</Label>
+        <Label>{t.checkThePc}</Label>
         <Row
-          title="Every"
-          hint="Less often saves battery"
+          title={t.every}
+          hint={t.everyHint}
           right={
             <View style={styles.segment}>
               {POLL_CHOICES.map((seconds) => {
@@ -142,7 +143,7 @@ export default function SettingsScreen({ onBack }: { onBack: () => void }) {
                     <Text
                       style={[styles.segText, { color: selected ? '#FFFFFF' : theme.ink3 }]}
                     >
-                      {seconds === 0 ? 'Off' : `${seconds}s`}
+                      {seconds === 0 ? t.off : `${seconds}s`}
                     </Text>
                   </Pressable>
                 );
@@ -151,10 +152,49 @@ export default function SettingsScreen({ onBack }: { onBack: () => void }) {
           }
         />
 
-        <Label>Version</Label>
+        <Label>{t.language}</Label>
+        <Row
+          title={t.language}
+          hint={t.languageHint}
+          right={
+            <View style={styles.segment}>
+              {([
+                ['system', t.systemLanguage],
+                ['en', LANGUAGE_NAMES.en],
+                ['nl', LANGUAGE_NAMES.nl],
+              ] as [LanguageChoice, string][]).map(([value, label]) => {
+                const selected = settings.language === value;
+                return (
+                  <Pressable
+                    key={value}
+                    style={[styles.segItem, selected && filled(theme, theme.dusk, 'rgba(0,0,0,0.25)')]}
+                    onPress={() => {
+                      update({ language: value });
+                      play('tap');
+                      tapFeedback();
+                    }}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected }}
+                  >
+                    <Text style={[styles.segText, { color: selected ? '#FFFFFF' : theme.ink3 }]}>
+                      {label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          }
+        />
+        <Text style={[styles.rowNote, { color: theme.ink3 }]}>
+          {settings.language === 'system'
+            ? `${t.systemLanguage}: ${LANGUAGE_NAMES[deviceLanguage()]}`
+            : ' '}
+        </Text>
+
+        <Label>{t.version}</Label>
         <UpdateSection />
 
-        <ClayButton label="Done" tone="accent" onPress={onBack} style={styles.done} />
+        <ClayButton label={t.done} tone="accent" onPress={onBack} style={styles.done} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -166,7 +206,7 @@ export default function SettingsScreen({ onBack }: { onBack: () => void }) {
  * this is where you come to find out which it was.
  */
 function UpdateSection() {
-  const { theme } = useTheme();
+  const { theme, t } = useTheme();
   const [state, setState] = useState<'idle' | 'checking'>('idle');
   const [result, setResult] = useState<UpdateCheck | null>(null);
 
@@ -197,21 +237,21 @@ function UpdateSection() {
       {result && (
         <Text style={[styles.aboutStatus, { color: tone }]}>
           {result.state === 'current'
-            ? 'This is the newest version.'
+            ? t.upToDate
             : result.state === 'available'
-            ? `${result.info.version} is available.`
+            ? t.updateAvailable(result.info.version)
             : result.reason}
         </Text>
       )}
 
       {!result && (
         <Text style={[styles.aboutHint, { color: theme.ink3 }]}>
-          Reveille also looks for a newer version each time you open it.
+          {t.alsoChecksOnOpen}
         </Text>
       )}
 
       <ClayButton
-        label={state === 'checking' ? 'Checking…' : 'Check for updates'}
+        label={state === 'checking' ? t.checkingEllipsis : t.checkForUpdates}
         busy={state === 'checking'}
         onPress={check}
         style={styles.aboutAction}
@@ -219,7 +259,7 @@ function UpdateSection() {
 
       {result?.state === 'available' && (
         <ClayButton
-          label={`Download ${result.info.version}`}
+          label={t.download(result.info.version)}
           tone="accent"
           onPress={() => Linking.openURL(result.info.downloadUrl)}
           style={styles.aboutAction}
@@ -229,9 +269,9 @@ function UpdateSection() {
   );
 }
 
-function Label({ children }: { children: string }) {
+function Label({ children }: { children: React.ReactNode }) {
   const { theme } = useTheme();
-  return <Text style={[styles.groupLabel, { color: theme.ink3 }]}>{children.toUpperCase()}</Text>;
+  return <Text style={[styles.groupLabel, { color: theme.ink3 }]}>{children}</Text>;
 }
 
 function Row({ title, hint, right }: { title: string; hint: string; right: React.ReactNode }) {
@@ -254,7 +294,14 @@ const styles = StyleSheet.create({
   scroll: { paddingBottom: 34 },
   title: { fontSize: 30, fontWeight: '800', marginTop: 10, marginBottom: 4, letterSpacing: -0.4 },
 
-  groupLabel: { fontSize: 10.5, fontWeight: '800', letterSpacing: 1.3, marginTop: 26, marginBottom: 10 },
+  groupLabel: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    letterSpacing: 1.3,
+    textTransform: 'uppercase',
+    marginTop: 26,
+    marginBottom: 10,
+  },
 
   themeRow: { flexDirection: 'row', gap: 10 },
   themeChip: { flex: 1, borderRadius: RADIUS.field, paddingVertical: 11, alignItems: 'center', gap: 8 },

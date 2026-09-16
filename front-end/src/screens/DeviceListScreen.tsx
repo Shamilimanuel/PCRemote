@@ -18,14 +18,14 @@ type Props = {
 };
 
 export default function DeviceListScreen({ devices, onSelect, onAdd, onSettings }: Props) {
-  const { theme } = useTheme();
+  const { theme, t } = useTheme();
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.ground }]} edges={['top', 'bottom']}>
       <View style={styles.header}>
-        <Text style={[styles.title, { color: theme.ink }]}>Reveille</Text>
+        <Text style={[styles.title, { color: theme.ink }]}>{t.appName}</Text>
         <View style={styles.headerRight}>
-          <Pressable onPress={onSettings} hitSlop={12} accessibilityLabel="Settings">
+          <Pressable onPress={onSettings} hitSlop={12} accessibilityLabel={t.settings}>
             <GearIcon size={22} color={theme.ink3} strokeWidth={1.9} />
           </Pressable>
           <Pressable
@@ -36,7 +36,7 @@ export default function DeviceListScreen({ devices, onSelect, onAdd, onSettings 
               onAdd();
             }}
           >
-            <Text style={styles.addText}>+ Add PC</Text>
+            <Text style={styles.addText}>{t.addPc}</Text>
           </Pressable>
         </View>
       </View>
@@ -45,9 +45,9 @@ export default function DeviceListScreen({ devices, onSelect, onAdd, onSettings 
 
       {devices.length === 0 ? (
         <View style={styles.empty}>
-          <Text style={[styles.emptyTitle, { color: theme.ink }]}>No PCs yet</Text>
+          <Text style={[styles.emptyTitle, { color: theme.ink }]}>{t.noPcsTitle}</Text>
           <Text style={[styles.emptyText, { color: theme.ink3 }]}>
-            Tap “+ Add PC” to get started. There’s a ? there if you haven’t set the PC up yet.
+            {t.noPcsBody}
           </Text>
         </View>
       ) : (
@@ -64,7 +64,7 @@ export default function DeviceListScreen({ devices, onSelect, onAdd, onSettings 
 }
 
 function DeviceCard({ device, onPress }: { device: Device; onPress: () => void }) {
-  const { theme, settings } = useTheme();
+  const { theme, settings, t } = useTheme();
   const { status } = useDeviceStatus(
     device,
     settings.pollSeconds > 0 ? settings.pollSeconds * 1000 : 0
@@ -95,7 +95,7 @@ function DeviceCard({ device, onPress }: { device: Device; onPress: () => void }
         <Text
           style={[styles.pillText, { color: status === 'online' ? theme.moss : theme.ink3 }]}
         >
-          {status === 'online' ? 'Awake' : status === 'offline' ? 'Asleep' : '…'}
+          {status === 'online' ? t.awake : status === 'offline' ? t.asleep : t.checking}
         </Text>
       </View>
     </Pressable>

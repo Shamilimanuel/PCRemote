@@ -10,7 +10,7 @@ import { RADIUS, raised, filled } from '../theme/clay';
  * having to go and look.
  */
 export default function UpdateBanner() {
-  const { theme } = useTheme();
+  const { theme, t } = useTheme();
   const [update, setUpdate] = useState<UpdateInfo | null>(null);
   const [dismissed, setDismissed] = useState(false);
 
@@ -29,15 +29,15 @@ export default function UpdateBanner() {
   return (
     <View style={[styles.banner, raised(theme, 0.7)]}>
       <View style={styles.text}>
-        <Text style={[styles.title, { color: theme.ink }]}>Reveille {update.version} is available</Text>
-        <Text style={[styles.subtitle, { color: theme.ink3 }]}>Installs over this one — your PCs stay saved.</Text>
+        <Text style={[styles.title, { color: theme.ink }]}>{t.updateBannerTitle(update.version)}</Text>
+        <Text style={[styles.subtitle, { color: theme.ink3 }]}>{t.updateBannerSub}</Text>
       </View>
       <Pressable
         style={[styles.action, filled(theme, theme.dusk, 'rgba(0,0,0,0.22)')]}
         onPress={() => Linking.openURL(update.downloadUrl)}
         accessibilityRole="button"
       >
-        <Text style={styles.actionText}>Get it</Text>
+        <Text style={styles.actionText}>{t.getIt}</Text>
       </Pressable>
       <Pressable onPress={() => setDismissed(true)} hitSlop={12} accessibilityLabel="Dismiss">
         <Text style={[styles.dismiss, { color: theme.ink3 }]}>✕</Text>

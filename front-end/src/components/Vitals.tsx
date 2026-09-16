@@ -15,7 +15,7 @@ function gb(bytes: number): string {
 }
 
 export default function Vitals({ stats }: { stats: MachineStats | null | undefined }) {
-  const { theme } = useTheme();
+  const { theme, t } = useTheme();
   if (!stats) return null;
 
   const memUsed = stats.memory.totalBytes - stats.memory.freeBytes;
@@ -26,20 +26,20 @@ export default function Vitals({ stats }: { stats: MachineStats | null | undefin
   return (
     <View style={[styles.card, sunken(theme, 0.8)]}>
       <Bar
-        label="Processor"
+        label={t.processor}
         percent={stats.cpuPercent}
-        detail={stats.cpuPercent === null ? 'measuring…' : `${stats.cores} cores`}
+        detail={stats.cpuPercent === null ? t.measuring : t.cores(stats.cores)}
       />
       <Bar
-        label="Memory"
+        label={t.memory}
         percent={stats.memory.usedPercent}
-        detail={`${gb(memUsed)} of ${gb(stats.memory.totalBytes)}`}
+        detail={`${gb(memUsed)} ${t.ofWord} ${gb(stats.memory.totalBytes)}`}
       />
       {stats.disk && diskUsedPercent !== null && (
         <Bar
-          label={`Disk ${stats.disk.drive}`}
+          label={`${t.disk} ${stats.disk.drive}`}
           percent={diskUsedPercent}
-          detail={`${gb(stats.disk.freeBytes)} free`}
+          detail={`${gb(stats.disk.freeBytes)} ${t.freeSuffix}`}
           // Disk fills up permanently rather than fluctuating, so a high
           // reading is only worth flagging when it is genuinely nearly full.
           warnAbove={90}

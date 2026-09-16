@@ -31,7 +31,7 @@ function activeInterface(device: Device, health: HealthResponse | null): Network
 }
 
 export default function NetworkInfo({ device, health, latencyMs, status, route }: Props) {
-  const { theme } = useTheme();
+  const { theme, t } = useTheme();
   const active = activeInterface(device, health);
   const offline = status !== 'online';
 
@@ -44,29 +44,29 @@ export default function NetworkInfo({ device, health, latencyMs, status, route }
     <View style={[styles.card, sunken(theme, 0.8)]}>
       <View style={styles.head}>
         <NetworkIcon size={15} color={theme.ink3} strokeWidth={1.8} />
-        <Text style={[styles.headText, { color: theme.ink3 }]}>NETWORK</Text>
+        <Text style={[styles.headText, { color: theme.ink3 }]}>{t.network}</Text>
       </View>
 
-      <Row label="Host name" value={health?.hostname ?? (offline ? 'Unknown until awake' : '—')} muted={offline} />
-      <Row label="Adapter" value={active?.interface ?? (offline ? 'Unknown until awake' : '—')} muted={offline} />
-      <Row label="IP address" value={device.ip} />
-      <Row label="Port" value={String(device.port)} />
+      <Row label={t.hostName} value={health?.hostname ?? (offline ? t.unknownUntilAwake : '—')} muted={offline} />
+      <Row label={t.adapter} value={active?.interface ?? (offline ? t.unknownUntilAwake : '—')} muted={offline} />
+      <Row label={t.ipAddress} value={device.ip} />
+      <Row label={t.port} value={String(device.port)} />
       {device.remoteHost ? (
         <Row
-          label="Reached via"
-          value={route === 'remote' ? 'Away from home' : route === 'local' ? 'Home Wi-Fi' : '—'}
+          label={t.reachedVia}
+          value={route === 'remote' ? t.away : route === 'local' ? t.homeWifi : '—'}
           muted={offline}
         />
       ) : null}
-      <Row label="Subnet mask" value={active?.netmask ?? '—'} muted={offline} />
+      <Row label={t.subnetMask} value={active?.netmask ?? '—'} muted={offline} />
       <Row
-        label="Wake broadcast"
+        label={t.wakeBroadcast}
         value={active?.broadcast ?? `${device.ip.split('.').slice(0, 3).join('.')}.255`}
       />
-      <Row label="MAC address" value={formatMac(device.mac)} warn={macMismatch} />
+      <Row label={t.macAddress} value={formatMac(device.mac)} warn={macMismatch} />
       <Row
-        label="Response time"
-        value={latencyMs === null ? 'No reply' : `${latencyMs} ms`}
+        label={t.responseTime}
+        value={latencyMs === null ? t.noReply : `${latencyMs} ms`}
         muted={latencyMs === null}
       />
 
@@ -74,8 +74,7 @@ export default function NetworkInfo({ device, health, latencyMs, status, route }
         <View style={[styles.warning, { backgroundColor: theme.ground }]}>
           <AlertIcon size={14} color={theme.dawnDeep} strokeWidth={1.9} />
           <Text style={[styles.warningText, { color: theme.dawnDeep }]}>
-            This adapter’s MAC is {formatMac(active.mac)}. Wake won’t reach the PC until you tap
-            Edit and correct it.
+            {t.macMismatch(formatMac(active.mac))}
           </Text>
         </View>
       )}

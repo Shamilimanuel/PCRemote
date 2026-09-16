@@ -3,9 +3,12 @@ import { ClayTheme, THEMES } from './clay';
 import { DEFAULTS, loadSettings, saveSettings, Settings } from '../lib/settings';
 import { setSoundEnabled } from '../lib/sound';
 import { setHapticsEnabled } from '../lib/haptics';
+import { stringsFor, Strings } from '../i18n';
 
 type Ctx = {
   theme: ClayTheme;
+  /** Every visible string, already in the right language. */
+  t: Strings;
   settings: Settings;
   update: (patch: Partial<Settings>) => void;
   /** False until the saved settings have come back from storage. */
@@ -14,6 +17,7 @@ type Ctx = {
 
 const ThemeContext = createContext<Ctx>({
   theme: THEMES[DEFAULTS.theme],
+  t: stringsFor(DEFAULTS.language),
   settings: DEFAULTS,
   update: () => {},
   ready: false,
@@ -45,7 +49,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ theme: THEMES[settings.theme], settings, update, ready }),
+    () => ({
+      theme: THEMES[settings.theme],
+      t: stringsFor(settings.language),
+      settings,
+      update,
+      ready,
+    }),
     [settings, update, ready]
   );
 

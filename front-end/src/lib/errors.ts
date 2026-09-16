@@ -6,12 +6,18 @@
  * and, where there is one, the thing to try.
  */
 
+import type { Strings } from '../i18n';
+
 export type Explained = {
   title: string;
   message: string;
 };
 
-export function explain(err: unknown, context: 'reach' | 'action' = 'action'): Explained {
+export function explain(
+  err: unknown,
+  t: Strings,
+  context: 'reach' | 'action' = 'action'
+): Explained {
   const raw = err instanceof Error ? err.message : String(err ?? '');
   const lower = raw.toLowerCase();
 
@@ -19,45 +25,30 @@ export function explain(err: unknown, context: 'reach' | 'action' = 'action'): E
   // and the one whose default wording is least helpful.
   if (lower.includes('abort') || lower.includes('cancel')) {
     return {
-      title: 'No answer',
-      message:
-        context === 'reach'
-          ? 'Your PC didn’t reply. It may be asleep, switched off, or not running the agent yet.'
-          : 'Your PC didn’t reply in time. It may have gone to sleep.',
+      title: t.errNoAnswerTitle,
+      message: context === 'reach' ? t.errNoAnswerReach : t.errNoAnswerAction,
     };
   }
 
   if (lower.includes('network request failed') || lower.includes('failed to fetch')) {
-    return {
-      title: 'Can’t reach it',
-      message:
-        'Nothing answered at that address. Check your phone is on the same Wi-Fi as the PC, and that the address is right.',
-    };
+    return { title: t.errUnreachableTitle, message: t.errUnreachableBody };
   }
 
   if (lower.includes('401') || lower.includes('unauthorized')) {
-    return {
-      title: 'Wrong token',
-      message:
-        'The PC answered but refused the token. Run the pairing command again and scan the new code.',
-    };
+    return { title: t.errTokenTitle, message: t.errTokenBody };
   }
 
   if (lower.includes('econnrefused') || lower.includes('connection refused')) {
-    return {
-      title: 'Nothing listening',
-      message:
-        'The PC is on the network but nothing is listening on that port. The agent probably isn’t running.',
-    };
+    return { title: t.errRefusedTitle, message: t.errRefusedBody };
   }
 
   if (lower.includes('not set up') || lower.includes('install-firmware')) {
-    return { title: 'Not set up', message: raw };
+    return { title: t.errNotSetUp, message: raw };
   }
 
   return {
-    title: 'That didn’t work',
+    title: t.errGenericTitle,
     // Strip the "fetch failed: " prefix React Native likes to add.
-    message: raw.replace(/^fetch failed:\s*/i, '') || 'Something went wrong.',
+    message: raw.replace(/^fetch failed:\s*/i, '') || t.errGenericBody,
   };
 }

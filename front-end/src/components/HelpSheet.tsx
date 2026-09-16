@@ -1,6 +1,7 @@
 import React from 'react';
 import { Modal, View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTheme } from '../theme/ThemeContext';
 
 const SETUP_COMMAND =
   'irm https://raw.githubusercontent.com/Shamilimanuel/PCRemote/main/setup.ps1 | iex';
@@ -18,6 +19,7 @@ type Props = {
  * lives in the README, which nobody reads on a phone.
  */
 export default function HelpSheet({ visible, onClose, onScan }: Props) {
+  const { t } = useTheme();
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.backdrop}>
@@ -25,17 +27,17 @@ export default function HelpSheet({ visible, onClose, onScan }: Props) {
           <View style={styles.grabber} />
 
           <View style={styles.header}>
-            <Text style={styles.title}>Adding your PC</Text>
-            <Pressable onPress={onClose} hitSlop={12} accessibilityLabel="Close">
-              <Text style={styles.close}>Done</Text>
+            <Text style={styles.title}>{t.helpTitle}</Text>
+            <Pressable onPress={onClose} hitSlop={12} accessibilityLabel={t.done}>
+              <Text style={styles.close}>{t.done}</Text>
             </Pressable>
           </View>
 
           <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
             <Step
               number="1"
-              title="Set up the PC"
-              body="On the PC you want to control, open PowerShell from the Start menu and paste this in:"
+              title={t.helpStep1Title}
+              body={t.helpStep1Body}
             />
             <View style={styles.command}>
               <Text style={styles.commandText} selectable>
@@ -43,14 +45,13 @@ export default function HelpSheet({ visible, onClose, onScan }: Props) {
               </Text>
             </View>
             <Text style={styles.aside}>
-              It installs everything, sets itself to start with Windows, and finishes by opening a
-              page with a code on it. You only ever do this once per PC.
+              {t.helpStep1Aside}
             </Text>
 
             <Step
               number="2"
-              title="Scan the code"
-              body="Tap Scan code and point your phone at the page on your screen. Every box below fills itself in."
+              title={t.helpStep2Title}
+              body={t.helpStep2Body}
             />
             {onScan && (
               <Pressable
@@ -60,27 +61,26 @@ export default function HelpSheet({ visible, onClose, onScan }: Props) {
                   onScan();
                 }}
               >
-                <Text style={styles.scanNowText}>Scan code</Text>
+                <Text style={styles.scanNowText}>{t.scanCode}</Text>
               </Pressable>
             )}
 
             <Step
               number="3"
-              title="Or type it in"
-              body="The same page lists everything in plain text underneath the code. If the camera won't cooperate, copy those five values into the boxes by hand."
+              title={t.helpStep3Title}
+              body={t.helpStep3Body}
             />
 
             <View style={styles.divider} />
 
-            <Text style={styles.footTitle}>Two things that catch people out</Text>
+            <Text style={styles.footTitle}>{t.helpGotchas}</Text>
             <Text style={styles.foot}>
-              <Text style={styles.footLead}>Both devices need the same Wi-Fi.</Text> This works on
-              your home network, not over mobile data. That's deliberate — nothing is exposed to the
-              internet.
+              <Text style={styles.footLead}>{t.helpWifiLead}</Text>
+              {t.helpWifiBody}
             </Text>
             <Text style={styles.foot}>
-              <Text style={styles.footLead}>The token is a password.</Text> Anyone on your network
-              who has it can switch the PC off. Don't share the page it's printed on.
+              <Text style={styles.footLead}>{t.helpTokenLead}</Text>
+              {t.helpTokenBody}
             </Text>
           </ScrollView>
         </SafeAreaView>

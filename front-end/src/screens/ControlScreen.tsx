@@ -3,14 +3,15 @@ import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Device } from '../types/device';
 import { sendAction, cancelShutdown } from '../lib/api';
-import { sendMagicPacket } from '../lib/wol';
 import { useDeviceStatus, formatUptime } from '../hooks/useDeviceStatus';
+import { useWakeWatch } from '../hooks/useWakeWatch';
 import { useTheme } from '../theme/ThemeContext';
 import { RADIUS, sunken } from '../theme/clay';
 import { Blob, ClayButton, Surface } from '../components/Clay';
 import NetworkInfo from '../components/NetworkInfo';
 import Vitals from '../components/Vitals';
 import TimerSheet from '../components/TimerSheet';
+import WakeProgress from '../components/WakeProgress';
 import { useDialog } from '../components/Dialog';
 import { explain } from '../lib/errors';
 import { play, Voice } from '../lib/sound';
@@ -47,18 +48,20 @@ const VOICE: Record<ActionKey, Voice> = {
   firmware: 'bios',
 };
 
-const LABEL: Record<ActionKey, string> = {
-  start: 'Wake',
-  shutdown: 'Shut down',
-  restart: 'Restart',
-  sleep: 'Sleep',
-  lock: 'Lock',
-  cancel: 'Cancel',
-  firmware: 'Reboot to BIOS',
+type LabelKey = 'wake' | 'shutDown' | 'restart' | 'sleep' | 'lock' | 'cancel' | 'rebootToBios';
+
+const LABEL: Record<ActionKey, LabelKey> = {
+  start: 'wake',
+  shutdown: 'shutDown',
+  restart: 'restart',
+  sleep: 'sleep',
+  lock: 'lock',
+  cancel: 'cancel',
+  firmware: 'rebootToBios',
 };
 
 export default function ControlScreen({ device, onBack, onEdit, onSettings }: Props) {
-  const { theme, settings } = useTheme();
+  const { theme, settings, t } = useTheme();
   const { show } = useDialog();
   const [busy, setBusy] = useState<ActionKey | null>(null);
   const [result, setResult] = useState<{ key: ActionKey; ok: boolean } | null>(null);
@@ -70,6 +73,10 @@ export default function ControlScreen({ device, onBack, onEdit, onSettings }: Pr
     device,
     settings.pollSeconds > 0 ? settings.pollSeconds * 1000 : 0
   );
+
+  // Wake gets its own, more insistent watcher: the ordinary poll is every ten
+  // seconds, which is far too slow to feel like an answer.
+  const wake = useWakeWatch(device, refresh);
 
   const clearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -92,23 +99,26 @@ export default function ControlScreen({ device, onBack, onEdit, onSettings }: Pr
     setMessage(null);
     try {
       if (key === 'start') {
-        await sendMagicPacket(device.mac, device.ip);
-        report(key, true, 'Wake-up signal sent');
+        await wake.start();
+        // No report() here: the progress card is the feedback, and it keeps
+        // talking for the next minute rather than flashing once.
+        play('done');
+        successFeedback();
       } else if (key === 'cancel') {
         await cancelShutdown(device);
-        report(key, true, 'Nothing left pending');
+        report(key, true, t.nothingPending);
       } else {
         await sendAction(device, key, delaySeconds);
         report(
           key,
           true,
           delaySeconds && delaySeconds > 60
-            ? `${LABEL[key]} in ${Math.round(delaySeconds / 60)} min`
-            : `${LABEL[key]} sent`
+            ? `${t[LABEL[key]]} ${t.inMinutes(Math.round(delaySeconds / 60))}`
+            : `${t[LABEL[key]]} ${t.sentSuffix}`
         );
       }
     } catch (err) {
-      const { title, message } = explain(err);
+      const { title, message } = explain(err, t);
       report(key, false, title);
       show({ tone: 'bad', title, message });
     } finally {
@@ -124,10 +134,10 @@ export default function ControlScreen({ device, onBack, onEdit, onSettings }: Pr
     if (settings.confirmStyle === 'dialog' && DESTRUCTIVE.includes(key)) {
       show({
         tone: 'warn',
-        title: `${LABEL[key]} ${device.name}?`,
+        title: t.confirmTitle(t[LABEL[key]], device.name),
         message: describe(key),
-        cancelLabel: 'Not now',
-        confirmLabel: LABEL[key],
+        cancelLabel: t.notNow,
+        confirmLabel: t[LABEL[key]],
         destructive: true,
         onConfirm: () => run(key),
       });
@@ -138,10 +148,10 @@ export default function ControlScreen({ device, onBack, onEdit, onSettings }: Pr
 
   function describe(key: ActionKey) {
     return key === 'shutdown'
-      ? 'The PC will power off in a few seconds.'
+      ? t.confirmShutdown
       : key === 'firmware'
-      ? 'The PC will restart into its BIOS settings screen. You\u2019ll need to be at the keyboard \u2014 the phone can\u2019t drive it from there.'
-      : 'The PC will restart in a few seconds.';
+      ? t.confirmBios
+      : t.confirmRestart;
   }
 
   /** Long-press offers a delay, on agents new enough to accept one. */
@@ -159,13 +169,13 @@ export default function ControlScreen({ device, onBack, onEdit, onSettings }: Pr
     <SafeAreaView style={[styles.container, { backgroundColor: theme.ground }]} edges={['top', 'bottom']}>
       <View style={styles.header}>
         <Pressable onPress={onBack} hitSlop={12}>
-          <Text style={[styles.navText, { color: theme.dusk }]}>{'‹ PCs'}</Text>
+          <Text style={[styles.navText, { color: theme.dusk }]}>{t.backToPcs}</Text>
         </Pressable>
         <View style={styles.headerRight}>
           <Pressable onPress={onEdit} hitSlop={12}>
-            <Text style={[styles.navText, { color: theme.ink3 }]}>Edit</Text>
+            <Text style={[styles.navText, { color: theme.ink3 }]}>{t.edit}</Text>
           </Pressable>
-          <Pressable onPress={onSettings} hitSlop={12} accessibilityLabel="Settings">
+          <Pressable onPress={onSettings} hitSlop={12} accessibilityLabel={t.settings}>
             <GearIcon size={21} color={theme.ink3} strokeWidth={1.9} />
           </Pressable>
         </View>
@@ -181,7 +191,7 @@ export default function ControlScreen({ device, onBack, onEdit, onSettings }: Pr
               {device.ip}
             </Text>
           </View>
-          <Pressable onPress={refresh} hitSlop={10} accessibilityLabel="Check now">
+          <Pressable onPress={refresh} hitSlop={10} accessibilityLabel={t.checkNow}>
             <View style={[styles.pill, sunken(theme, 0.6)]}>
               <View
                 style={[
@@ -195,7 +205,7 @@ export default function ControlScreen({ device, onBack, onEdit, onSettings }: Pr
                   { color: status === 'online' ? theme.moss : theme.ink3 },
                 ]}
               >
-                {status === 'online' ? 'Awake' : status === 'offline' ? 'Asleep' : '…'}
+                {status === 'online' ? t.awake : status === 'offline' ? t.asleep : t.checking}
               </Text>
             </View>
           </Pressable>
@@ -203,9 +213,9 @@ export default function ControlScreen({ device, onBack, onEdit, onSettings }: Pr
 
         {health && (
           <Text style={[styles.uptime, { color: theme.ink3 }]}>
-            up {formatUptime(health.uptimeSeconds)}
+            {t.up} {formatUptime(health.uptimeSeconds)}
             {latencyMs !== null ? `  ·  ${latencyMs} ms` : ''}
-            {route === 'remote' ? '  ·  away from home' : ''}
+            {route === 'remote' ? `  ·  ${t.awayFromHome}` : ''}
           </Text>
         )}
 
@@ -213,7 +223,7 @@ export default function ControlScreen({ device, onBack, onEdit, onSettings }: Pr
           <View style={styles.gridRow}>
             <Blob
               Icon={PowerIcon}
-              label="Wake"
+              label={t.wake}
               accent
               voice={VOICE.start}
               busy={busy === 'start'}
@@ -223,7 +233,7 @@ export default function ControlScreen({ device, onBack, onEdit, onSettings }: Pr
             />
             <Blob
               Icon={RestartIcon}
-              label="Restart"
+              label={t.restart}
               voice={VOICE.restart}
               busy={busy === 'restart'}
               dimmed={offline}
@@ -236,7 +246,7 @@ export default function ControlScreen({ device, onBack, onEdit, onSettings }: Pr
           <View style={styles.gridRow}>
             <Blob
               Icon={MoonIcon}
-              label="Sleep"
+              label={t.sleep}
               voice={VOICE.sleep}
               busy={busy === 'sleep'}
               dimmed={offline}
@@ -245,7 +255,7 @@ export default function ControlScreen({ device, onBack, onEdit, onSettings }: Pr
             />
             <Blob
               Icon={LockIcon}
-              label="Lock"
+              label={t.lock}
               voice={VOICE.lock}
               busy={busy === 'lock'}
               dimmed={offline}
@@ -256,7 +266,7 @@ export default function ControlScreen({ device, onBack, onEdit, onSettings }: Pr
           <View style={styles.gridRow}>
             <Blob
               Icon={PowerOffIcon}
-              label="Shut down"
+              label={t.shutDown}
               danger
               voice={VOICE.shutdown}
               busy={busy === 'shutdown'}
@@ -268,7 +278,7 @@ export default function ControlScreen({ device, onBack, onEdit, onSettings }: Pr
             />
             <Blob
               Icon={AbortIcon}
-              label="Cancel"
+              label={t.cancel}
               voice={VOICE.cancel}
               busy={busy === 'cancel'}
               dimmed={offline}
@@ -280,7 +290,7 @@ export default function ControlScreen({ device, onBack, onEdit, onSettings }: Pr
 
         {health?.capabilities?.firmwareReboot && (
           <ClayButton
-            label="Reboot to BIOS"
+            label={t.rebootToBios}
             tone="quiet"
             icon={ChipIcon}
             voice={VOICE.firmware}
@@ -291,11 +301,13 @@ export default function ControlScreen({ device, onBack, onEdit, onSettings }: Pr
           />
         )}
 
+        <WakeProgress watch={wake} name={device.name} />
+
         {health?.pending && (
           <View style={[styles.pending, { backgroundColor: theme.ground }]}>
             <Text style={[styles.pendingText, { color: theme.dawnDeep }]}>
-              {health.pending.action === 'restart' ? 'Restarting' : 'Shutting down'} in{' '}
-              {formatCountdown(health.pending.secondsRemaining)} — tap Cancel to call it off
+              {health.pending.action === 'restart' ? t.countdownRestart : t.countdownShutdown}{' '}
+              {formatCountdown(health.pending.secondsRemaining)} {t.tapCancelToStop}
             </Text>
           </View>
         )}
@@ -316,15 +328,13 @@ export default function ControlScreen({ device, onBack, onEdit, onSettings }: Pr
         <NetworkInfo device={device} health={health} latencyMs={latencyMs} status={status} route={route} />
 
         <Text style={[styles.footnote, { color: theme.ink3 }]}>
-          {offline
-            ? 'The PC isn’t answering — it’s off, asleep, or not running the agent. Only Wake will do anything until it’s back.'
-            : 'Wake works over your own Wi-Fi only. A powered-off PC has nothing listening for anything else.'}
+          {offline ? t.offlineFootnote : t.onlineFootnote}
         </Text>
       </ScrollView>
 
       <TimerSheet
         visible={timerFor !== null}
-        verb={timerFor === 'restart' ? 'Restart' : 'Shut down'}
+        verb={timerFor === 'restart' ? t.restart : t.shutDown}
         onPick={(seconds) => {
           const key = timerFor;
           setTimerFor(null);
