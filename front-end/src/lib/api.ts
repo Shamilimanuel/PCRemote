@@ -82,6 +82,23 @@ export function pingHealth(device: Device) {
   return request<HealthResponse>(device, '/health', undefined, PING_TIMEOUT_MS);
 }
 
+/**
+ * Asks the lock-screen responder -- a separate, much smaller thing than the
+ * agent, on its own port -- whether the PC is powered on. Worth calling only
+ * once the agent itself has failed to answer, since a PC that is fully up
+ * answers on both and the agent's reply is the one with everything in it.
+ *
+ * The port is the agent's plus one, matching src/presence.js on the PC.
+ */
+export function pingPresence(device: Device) {
+  return request<HealthResponse>(
+    { ...device, port: device.port + 1 },
+    '/health',
+    undefined,
+    PING_TIMEOUT_MS
+  );
+}
+
 export function sendAction(
   device: Device,
   action: Exclude<PendingAction, null>,

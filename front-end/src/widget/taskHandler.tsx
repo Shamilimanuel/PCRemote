@@ -1,7 +1,7 @@
 import React from 'react';
 import type { WidgetTaskHandlerProps } from 'react-native-android-widget';
 import { getDevices } from '../lib/storage';
-import { pingHealth, sendAction } from '../lib/api';
+import { pingHealth, pingPresence, sendAction } from '../lib/api';
 import { sendMagicPacket } from '../lib/wol';
 import { formatUptime } from '../hooks/useDeviceStatus';
 import { Device, DeviceStatus } from '../types/device';
@@ -34,7 +34,15 @@ async function currentState(device: Device | null, detail?: string): Promise<Wid
     status = 'online';
     uptime = `up ${formatUptime(data.uptimeSeconds)}`;
   } catch {
-    status = 'offline';
+    // Same distinction the app makes: a PC sitting at the lock screen after a
+    // Wake-on-LAN start is on, even though the agent is not up to say so.
+    try {
+      const { data } = await pingPresence(device);
+      status = 'locked';
+      uptime = `up ${formatUptime(data.uptimeSeconds)}`;
+    } catch {
+      status = 'offline';
+    }
   }
 
   return { deviceName: device.name, status, detail: detail ?? uptime };

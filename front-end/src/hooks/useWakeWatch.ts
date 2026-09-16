@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Device } from '../types/device';
-import { pingHealth } from '../lib/api';
+import { pingHealth, pingPresence } from '../lib/api';
 import { sendMagicPacket } from '../lib/wol';
 
 /**
@@ -11,6 +11,13 @@ import { sendMagicPacket } from '../lib/wol';
  * keep knocking until someone answers. That is what this does, and the counting
  * is the point: a cold start takes twenty to forty seconds, which feels like
  * failure unless the app says otherwise.
+ *
+ * It knocks on the lock-screen responder as well as the agent, because on a PC
+ * started from fully off the agent does not exist yet -- Windows starts it when
+ * someone logs in. Waiting only for the agent meant this counted all the way to
+ * sixty and reported that the wake had failed, while the PC it had just woken
+ * sat there at its lock screen. What this measures is whether the machine came
+ * up, and it did.
  */
 
 const KNOCK_EVERY_MS = 2000;
@@ -89,7 +96,7 @@ export function useWakeWatch(device: Device, onAwake?: () => void): WakeWatch {
     knocker.current = setInterval(async () => {
       if (cancelled.current) return;
       try {
-        await pingHealth(device);
+        await pingHealth(device).catch(() => pingPresence(device));
         if (cancelled.current) return;
         stop();
         setTookSeconds(since());
