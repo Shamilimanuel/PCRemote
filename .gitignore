@@ -1,0 +1,19 @@
+node_modules/
+
+# OneDrive / Windows
+desktop.ini
+Thumbs.db
+
+# The agent's auth token — regenerated per install, never commit
+back-end/config.json
+
+# App signing keys and anything else that must stay off GitHub
+secrets/
+*.jks
+*.keystore
+*.p12
+*.p8
+
+# Generated native projects (rebuilt from app.json on every build)
+front-end/android/
+front-end/ios/

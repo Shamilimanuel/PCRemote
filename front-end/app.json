@@ -1,0 +1,63 @@
+{
+  "expo": {
+    "name": "PC Remote",
+    "slug": "pc-remote",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "pcremote",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0F1115",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.shami.pcremote",
+      "buildNumber": "2",
+      "infoPlist": {
+        "NSAppTransportSecurity": {
+          "NSAllowsLocalNetworking": true
+        },
+        "NSLocalNetworkUsageDescription": "PC Remote needs local network access to reach the agent on your PC and to broadcast the Wake-on-LAN packet that powers it on.",
+        "NSBonjourServices": [
+          "_pcremote._tcp"
+        ]
+      }
+    },
+    "android": {
+      "package": "com.shami.pcremote",
+      "versionCode": 2,
+      "adaptiveIcon": {
+        "backgroundColor": "#0F1115",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "INTERNET",
+        "ACCESS_NETWORK_STATE",
+        "ACCESS_WIFI_STATE",
+        "CHANGE_WIFI_MULTICAST_STATE"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-dev-client",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "5b97340d-58a6-47c1-82f7-c52e3fbf2d76"
+      }
+    },
+    "owner": "kasaneteto0401"
+  }
+}
