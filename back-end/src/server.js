@@ -1,8 +1,17 @@
 const os = require('os');
 const crypto = require('crypto');
 const express = require('express');
-const { isValidAction, runAction, cancelPendingShutdown, hasFirmwareTask } = require('./commands');
+const {
+  isValidAction,
+  runAction,
+  cancelPendingShutdown,
+  hasFirmwareTask,
+  getPending,
+  normalizeDelay,
+  MAX_DELAY_SECONDS,
+} = require('./commands');
 const { getPrimaryNetworkInfo } = require('./config');
+const { collect } = require('./stats');
 
 function timingSafeEqual(a, b) {
   const bufA = Buffer.from(a);
@@ -26,6 +35,8 @@ function createServer(config) {
   }
 
   app.get('/health', requireAuth, async (req, res) => {
+    const pending = getPending();
+
     res.json({
       status: 'ok',
       hostname: os.hostname(),
@@ -37,20 +48,43 @@ function createServer(config) {
       // Lets the app hide buttons for things this PC isn't set up to do.
       capabilities: {
         firmwareReboot: await hasFirmwareTask(),
+        timedShutdown: true,
+        stats: true,
       },
+      // What the machine is actually doing, so the app can be a window as well
+      // as a switch.
+      stats: await collect(),
+      // Present only while a timed shutdown or restart is counting down.
+      pending: pending
+        ? {
+            action: pending.action,
+            secondsRemaining: Math.max(0, Math.round((pending.atMs - Date.now()) / 1000)),
+          }
+        : null,
     });
   });
 
   app.post('/action', requireAuth, async (req, res) => {
-    const { action } = req.body || {};
+    const { action, delaySeconds } = req.body || {};
     if (!isValidAction(action)) {
       res.status(400).json({ error: `Unknown action: ${action}` });
       return;
     }
 
+    if (delaySeconds !== undefined && !Number.isFinite(Number(delaySeconds))) {
+      res.status(400).json({ error: 'delaySeconds must be a number' });
+      return;
+    }
+
     try {
-      await runAction(action);
-      res.status(202).json({ status: 'accepted', action });
+      await runAction(action, { delaySeconds });
+      res.status(202).json({
+        status: 'accepted',
+        action,
+        delaySeconds:
+          delaySeconds === undefined ? undefined : normalizeDelay(delaySeconds),
+        maxDelaySeconds: MAX_DELAY_SECONDS,
+      });
     } catch (err) {
       res.status(500).json({ error: err.message });
     }

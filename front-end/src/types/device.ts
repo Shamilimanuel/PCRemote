@@ -37,7 +37,23 @@ export type HealthResponse = {
   capabilities?: {
     /** True once install-firmware-task.ps1 has been run on the PC. */
     firmwareReboot?: boolean;
+    /** Agent accepts a delaySeconds on shutdown and restart. */
+    timedShutdown?: boolean;
+    /** Agent reports CPU, memory and disk. */
+    stats?: boolean;
   };
+  /** What the machine is doing. Absent on agents older than this. */
+  stats?: MachineStats;
+  /** Present only while a timed shutdown or restart is counting down. */
+  pending?: { action: string; secondsRemaining: number } | null;
+};
+
+export type MachineStats = {
+  /** Null on the very first poll, which has nothing to compare against. */
+  cpuPercent: number | null;
+  cores: number;
+  memory: { totalBytes: number; freeBytes: number; usedPercent: number };
+  disk: { drive: string; totalBytes: number; freeBytes: number } | null;
 };
 
 /**
