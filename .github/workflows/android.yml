@@ -57,6 +57,13 @@ jobs:
 
       - name: Build release APK
         run: |
+          # React Native ships native code for four processor types by default
+          # and the APK carries all of them, though a phone uses exactly one.
+          # Every Android phone made since roughly 2017 is arm64, and at ~96MB
+          # the download was stalling in phone browsers.
+          sed -i 's/^reactNativeArchitectures=.*/reactNativeArchitectures=arm64-v8a/' android/gradle.properties
+          grep '^reactNativeArchitectures' android/gradle.properties
+
           chmod +x android/gradlew
           cd android
           ./gradlew assembleRelease --no-daemon --stacktrace
@@ -106,9 +113,24 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="v1.0.${GITHUB_RUN_NUMBER}"
-          gh release create "$TAG" front-end/dist/reveille.apk \
+          APK=front-end/dist/reveille.apk
+          SIZE=$(( $(stat -c%s "$APK") / 1048576 ))
+          SUM=$(sha256sum "$APK" | cut -d' ' -f1)
+
+          {
+            echo "Android APK built from \`${GITHUB_SHA::7}\`."
+            echo
+            echo "Download **reveille.apk** below and open it on your phone to install."
+            echo "It installs over any earlier version and keeps your saved PCs."
+            echo
+            echo "- Size: ${SIZE} MB"
+            echo "- Needs a 64-bit ARM phone (anything from roughly 2017 onwards)"
+            echo "- SHA-256: \`${SUM}\`"
+          } > notes.md
+
+          gh release create "$TAG" "$APK" \
             --repo "$GITHUB_REPOSITORY" \
             --title "Reveille $TAG" \
-            --notes "Android APK built from \`${GITHUB_SHA::7}\`. Download **reveille.apk** below and open it on your phone to install." \
+            --notes-file notes.md \
             --latest
         working-directory: .
