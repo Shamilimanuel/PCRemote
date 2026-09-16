@@ -1,7 +1,7 @@
 const os = require('os');
 const crypto = require('crypto');
 const express = require('express');
-const { isValidAction, runAction, cancelPendingShutdown } = require('./commands');
+const { isValidAction, runAction, cancelPendingShutdown, hasFirmwareTask } = require('./commands');
 const { getPrimaryNetworkInfo } = require('./config');
 
 function timingSafeEqual(a, b) {
@@ -25,7 +25,7 @@ function createServer(config) {
     next();
   }
 
-  app.get('/health', requireAuth, (req, res) => {
+  app.get('/health', requireAuth, async (req, res) => {
     res.json({
       status: 'ok',
       hostname: os.hostname(),
@@ -34,6 +34,10 @@ function createServer(config) {
       // Read live rather than at boot: DHCP can hand out a new address, and a
       // laptop can move between Wi-Fi and Ethernet, while the agent keeps running.
       interfaces: getPrimaryNetworkInfo(),
+      // Lets the app hide buttons for things this PC isn't set up to do.
+      capabilities: {
+        firmwareReboot: await hasFirmwareTask(),
+      },
     });
   });
 

@@ -98,6 +98,17 @@ export function NetworkIcon(props: IconProps) {
   );
 }
 
+export function ChipIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <Rect x="5" y="5" width="14" height="14" rx="2" />
+      <Rect x="9.5" y="9.5" width="5" height="5" rx="0.5" />
+      <Path d="M9 2v3M15 2v3M9 19v3M15 19v3" />
+      <Path d="M2 9h3M2 15h3M19 9h3M19 15h3" />
+    </Icon>
+  );
+}
+
 export function AlertIcon(props: IconProps) {
   return (
     <Icon {...props}>

@@ -19,7 +19,8 @@
         "NSLocalNetworkUsageDescription": "Reveille needs local network access to reach the agent on your PC and to broadcast the Wake-on-LAN packet that powers it on.",
         "NSBonjourServices": [
           "_reveille._tcp"
-        ]
+        ],
+        "NSCameraUsageDescription": "Reveille uses the camera only to read the pairing code shown on your PC."
       }
     },
     "android": {
@@ -36,7 +37,8 @@
         "INTERNET",
         "ACCESS_NETWORK_STATE",
         "ACCESS_WIFI_STATE",
-        "CHANGE_WIFI_MULTICAST_STATE"
+        "CHANGE_WIFI_MULTICAST_STATE",
+        "CAMERA"
       ]
     },
     "web": {
@@ -44,6 +46,13 @@
     },
     "plugins": [
       "expo-dev-client",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Reveille uses the camera only to read the pairing code shown on your PC.",
+          "recordAudioAndroid": false
+        }
+      ],
       [
         "expo-build-properties",
         {

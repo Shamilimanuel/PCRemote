@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,9 @@ import { checkHealth } from '../lib/api';
 
 type Props = {
   initial?: Device;
+  /** Adding rather than editing — only then is scanning offered. */
+  isNew?: boolean;
+  onScan?: () => void;
   onSave: (device: Device) => void;
   onCancel: () => void;
   onDelete?: () => void;
@@ -24,7 +27,7 @@ function makeId() {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-export default function DeviceFormScreen({ initial, onSave, onCancel, onDelete }: Props) {
+export default function DeviceFormScreen({ initial, isNew, onScan, onSave, onCancel, onDelete }: Props) {
   const [name, setName] = useState(initial?.name ?? '');
   const [ip, setIp] = useState(initial?.ip ?? '');
   const [port, setPort] = useState(initial ? String(initial.port) : '5533');
@@ -32,6 +35,20 @@ export default function DeviceFormScreen({ initial, onSave, onCancel, onDelete }
   const [mac, setMac] = useState(initial?.mac ?? '');
   const [remoteHost, setRemoteHost] = useState(initial?.remoteHost ?? '');
   const [testing, setTesting] = useState(false);
+
+  // A scan returns to this screen with fresh `initial` values; without this the
+  // fields would keep whatever was typed before the camera opened.
+  const seeded = useRef(initial?.token);
+  useEffect(() => {
+    if (!initial || seeded.current === initial.token) return;
+    seeded.current = initial.token;
+    setName(initial.name);
+    setIp(initial.ip);
+    setPort(String(initial.port));
+    setToken(initial.token);
+    setMac(initial.mac);
+    setRemoteHost(initial.remoteHost ?? '');
+  }, [initial]);
 
   const canSave = name.trim() && ip.trim() && port.trim() && token.trim() && mac.trim();
 
@@ -69,9 +86,15 @@ export default function DeviceFormScreen({ initial, onSave, onCancel, onDelete }
       <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.title}>{initial ? 'Edit PC' : 'Add PC'}</Text>
         <Text style={styles.hint}>
-          Run the agent on the PC (npm start in the agent folder). It prints the IP, port, token,
-          and MAC address to enter below.
+          On the PC, run <Text style={styles.mono}>npm run pair</Text> in the agent folder. It opens
+          a code you can scan — or read the values off it and type them in.
         </Text>
+
+        {isNew && onScan && (
+          <Pressable style={styles.scanButton} onPress={onScan}>
+            <Text style={styles.scanText}>Scan code</Text>
+          </Pressable>
+        )}
 
         <Field label="Name" value={name} onChangeText={setName} placeholder="e.g. Office PC" />
         <Field
@@ -161,7 +184,16 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0F1115' },
   scroll: { padding: 20, gap: 4 },
   title: { fontSize: 24, fontWeight: '700', color: '#FFFFFF', marginBottom: 6 },
-  hint: { color: '#8A8F9C', marginBottom: 20, lineHeight: 20 },
+  hint: { color: '#8A8F9C', marginBottom: 16, lineHeight: 20 },
+  mono: { color: '#FFFFFF', fontFamily: 'monospace' },
+  scanButton: {
+    backgroundColor: '#1E2C4A',
+    borderRadius: 14,
+    paddingVertical: 15,
+    alignItems: 'center',
+    marginBottom: 22,
+  },
+  scanText: { color: '#7FA8FF', fontWeight: '700', fontSize: 15 },
   fieldHint: { color: '#5A5F6B', fontSize: 12, lineHeight: 17, marginTop: -6, marginBottom: 4 },
   field: { marginBottom: 14 },
   label: { color: '#8A8F9C', marginBottom: 6, fontSize: 13 },

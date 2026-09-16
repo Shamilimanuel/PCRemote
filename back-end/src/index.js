@@ -1,5 +1,4 @@
 const os = require('os');
-const qrcode = require('qrcode-terminal');
 const { loadOrCreateConfig, getPrimaryNetworkInfo } = require('./config');
 const { createServer } = require('./server');
 
@@ -22,24 +21,23 @@ app.listen(config.port, '0.0.0.0', () => {
   if (netInfo.length === 0) {
     console.log('  Could not detect a LAN IPv4 address. Make sure Wi-Fi/Ethernet is connected.');
   } else {
-    console.log('  Enter these details in the mobile app (pick the interface you use for Wi-Fi):');
+    console.log('  Best guess first:');
     for (const info of netInfo) {
-      console.log(`   - [${info.interface}] IP: ${info.ip}   MAC: ${info.mac}`);
+      console.log(`   - [${info.interface}] IP: ${info.ip}   MAC: ${info.mac.toUpperCase()}`);
     }
   }
 
   console.log('');
-  console.log('  Pairing QR (encodes name/ip/port/token/mac as JSON):');
-  const primary = netInfo[0];
-  const pairingPayload = JSON.stringify({
-    name: hostname,
-    ip: primary ? primary.ip : null,
-    port: config.port,
-    token: config.token,
-    mac: primary ? primary.mac : null,
-  });
-  qrcode.generate(pairingPayload, { small: true });
-  console.log('  (QR scanning is not wired up in the app yet -- for now, type the values in by hand.)');
+  console.log('  To pair a phone, run:  npm run pair');
+  console.log('  (that opens a code you can scan. This window is hidden when the');
+  console.log('   agent starts automatically, so its output never reaches you.)');
   console.log('=========================================');
   console.log('');
+});
+
+// A crash inside the listen callback used to take the agent down silently,
+// because nothing is watching its output once it runs as a Scheduled Task.
+process.on('uncaughtException', (err) => {
+  console.error('Reveille agent crashed:', err);
+  process.exit(1);
 });

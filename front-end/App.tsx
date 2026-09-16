@@ -7,14 +7,17 @@ import { getDevices, saveDevice, deleteDevice } from './src/lib/storage';
 import DeviceListScreen from './src/screens/DeviceListScreen';
 import DeviceFormScreen from './src/screens/DeviceFormScreen';
 import ControlScreen from './src/screens/ControlScreen';
+import ScanScreen from './src/screens/ScanScreen';
 
-type Screen = 'list' | 'add' | 'edit' | 'control';
+type Screen = 'list' | 'add' | 'edit' | 'control' | 'scan';
 
 export default function App() {
   const [loading, setLoading] = useState(true);
   const [devices, setDevices] = useState<Device[]>([]);
   const [view, setView] = useState<Screen>('list');
   const [selected, setSelected] = useState<Device | null>(null);
+  // Filled by a scan, handed to the form as its starting values.
+  const [scanned, setScanned] = useState<Omit<Device, 'id'> | null>(null);
 
   const refresh = useCallback(async () => {
     setDevices(await getDevices());
@@ -37,6 +40,7 @@ export default function App() {
   async function handleSave(device: Device) {
     await saveDevice(device);
     await refresh();
+    setScanned(null);
     setSelected(device);
     setView('control');
   }
@@ -69,10 +73,28 @@ export default function App() {
 
         {(view === 'add' || view === 'edit') && (
           <DeviceFormScreen
-            initial={view === 'edit' && selected ? selected : undefined}
+            initial={
+              view === 'edit' && selected
+                ? selected
+                : scanned
+                ? { id: '', ...scanned }
+                : undefined
+            }
+            isNew={view === 'add'}
+            onScan={() => setView('scan')}
             onSave={handleSave}
             onCancel={() => setView(selected ? 'control' : 'list')}
             onDelete={view === 'edit' ? handleDelete : undefined}
+          />
+        )}
+
+        {view === 'scan' && (
+          <ScanScreen
+            onScanned={(device) => {
+              setScanned(device);
+              setView('add');
+            }}
+            onCancel={() => setView('add')}
           />
         )}
 
