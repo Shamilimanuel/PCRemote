@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, Linking } from 'react-native';
 import { checkForUpdate, UpdateInfo } from '../lib/updates';
+import { useTheme } from '../theme/ThemeContext';
+import { RADIUS, raised, filled } from '../theme/clay';
 
 /**
  * Checks GitHub once on mount. The repo is public, so this needs no token and
@@ -8,6 +10,7 @@ import { checkForUpdate, UpdateInfo } from '../lib/updates';
  * having to go and look.
  */
 export default function UpdateBanner() {
+  const { theme } = useTheme();
   const [update, setUpdate] = useState<UpdateInfo | null>(null);
   const [dismissed, setDismissed] = useState(false);
 
@@ -24,20 +27,20 @@ export default function UpdateBanner() {
   if (!update || dismissed) return null;
 
   return (
-    <View style={styles.banner}>
+    <View style={[styles.banner, raised(theme, 0.7)]}>
       <View style={styles.text}>
-        <Text style={styles.title}>Reveille {update.version} is available</Text>
-        <Text style={styles.subtitle}>Installs over this one — your PCs stay saved.</Text>
+        <Text style={[styles.title, { color: theme.ink }]}>Reveille {update.version} is available</Text>
+        <Text style={[styles.subtitle, { color: theme.ink3 }]}>Installs over this one — your PCs stay saved.</Text>
       </View>
       <Pressable
-        style={styles.action}
+        style={[styles.action, filled(theme, theme.dusk, 'rgba(0,0,0,0.22)')]}
         onPress={() => Linking.openURL(update.downloadUrl)}
         accessibilityRole="button"
       >
         <Text style={styles.actionText}>Get it</Text>
       </Pressable>
       <Pressable onPress={() => setDismissed(true)} hitSlop={12} accessibilityLabel="Dismiss">
-        <Text style={styles.dismiss}>✕</Text>
+        <Text style={[styles.dismiss, { color: theme.ink3 }]}>✕</Text>
       </Pressable>
     </View>
   );
@@ -48,22 +51,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: '#152744',
-    borderRadius: 14,
+    borderRadius: RADIUS.field,
     paddingVertical: 12,
     paddingHorizontal: 14,
     marginHorizontal: 20,
     marginTop: 10,
   },
   text: { flex: 1, minWidth: 0 },
-  title: { color: '#FFFFFF', fontWeight: '600', fontSize: 14 },
-  subtitle: { color: '#93A7CC', fontSize: 12, marginTop: 2 },
+  title: { fontWeight: '800', fontSize: 14 },
+  subtitle: { fontSize: 11.5, marginTop: 2, fontWeight: '600' },
   action: {
-    backgroundColor: '#3D7EFF',
     borderRadius: 16,
     paddingHorizontal: 14,
     paddingVertical: 7,
   },
-  actionText: { color: '#FFFFFF', fontWeight: '600', fontSize: 13 },
-  dismiss: { color: '#6E7F9E', fontSize: 15, paddingHorizontal: 2 },
+  actionText: { color: '#FFFFFF', fontWeight: '800', fontSize: 13 },
+  dismiss: { fontSize: 15, paddingHorizontal: 2 },
 });

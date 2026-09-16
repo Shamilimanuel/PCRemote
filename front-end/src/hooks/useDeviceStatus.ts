@@ -57,6 +57,13 @@ export function useDeviceStatus(device: Device, intervalMs = DEFAULT_INTERVAL_MS
     }
 
     poll();
+    // 0 means the user turned background checking off to save battery. The
+    // first poll still runs, so opening a PC always shows something current.
+    if (intervalMs <= 0) {
+      return () => {
+        cancelled = true;
+      };
+    }
     const timer = setInterval(poll, intervalMs);
     return () => {
       cancelled = true;

@@ -1,6 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Device, DeviceStatus, HealthResponse, NetworkInterface, Route } from '../types/device';
+import { useTheme } from '../theme/ThemeContext';
+import { RADIUS, sunken } from '../theme/clay';
 import { NetworkIcon, AlertIcon } from './icons';
 
 type Props = {
@@ -29,33 +31,38 @@ function activeInterface(device: Device, health: HealthResponse | null): Network
 }
 
 export default function NetworkInfo({ device, health, latencyMs, status, route }: Props) {
+  const { theme } = useTheme();
   const active = activeInterface(device, health);
   const offline = status !== 'online';
 
   // A saved MAC that doesn't belong to this adapter is the quiet failure mode
-  // behind "Start does nothing" -- the magic packet goes out addressed to a
-  // machine that isn't there.
+  // behind "Wake does nothing" -- the packet goes out addressed to a machine
+  // that isn't there.
   const macMismatch = Boolean(active && normalizeMac(active.mac) !== normalizeMac(device.mac));
 
   return (
-    <View style={styles.card}>
-      <View style={styles.cardHeader}>
-        <NetworkIcon size={16} color="#8A8F9C" strokeWidth={1.7} />
-        <Text style={styles.cardTitle}>Network</Text>
+    <View style={[styles.card, sunken(theme, 0.8)]}>
+      <View style={styles.head}>
+        <NetworkIcon size={15} color={theme.ink3} strokeWidth={1.8} />
+        <Text style={[styles.headText, { color: theme.ink3 }]}>NETWORK</Text>
       </View>
 
-      <Row label="Host name" value={health?.hostname ?? (offline ? 'Unknown until online' : '—')} muted={offline} />
-      <Row label="Adapter" value={active?.interface ?? (offline ? 'Unknown until online' : '—')} muted={offline} />
-      <Row label="IP address" value={`${device.ip}:${device.port}`} />
+      <Row label="Host name" value={health?.hostname ?? (offline ? 'Unknown until awake' : '—')} muted={offline} />
+      <Row label="Adapter" value={active?.interface ?? (offline ? 'Unknown until awake' : '—')} muted={offline} />
+      <Row label="IP address" value={device.ip} />
+      <Row label="Port" value={String(device.port)} />
       {device.remoteHost ? (
         <Row
           label="Reached via"
-          value={route === 'remote' ? `${device.remoteHost} (away)` : route === 'local' ? 'Home Wi-Fi' : '—'}
+          value={route === 'remote' ? 'Away from home' : route === 'local' ? 'Home Wi-Fi' : '—'}
           muted={offline}
         />
       ) : null}
       <Row label="Subnet mask" value={active?.netmask ?? '—'} muted={offline} />
-      <Row label="Wake broadcast" value={active?.broadcast ?? `${device.ip.split('.').slice(0, 3).join('.')}.255`} />
+      <Row
+        label="Wake broadcast"
+        value={active?.broadcast ?? `${device.ip.split('.').slice(0, 3).join('.')}.255`}
+      />
       <Row label="MAC address" value={formatMac(device.mac)} warn={macMismatch} />
       <Row
         label="Response time"
@@ -64,11 +71,11 @@ export default function NetworkInfo({ device, health, latencyMs, status, route }
       />
 
       {macMismatch && active && (
-        <View style={styles.warning}>
-          <AlertIcon size={14} color="#E0A33E" strokeWidth={1.8} />
-          <Text style={styles.warningText}>
-            This adapter's MAC is {formatMac(active.mac)}. Start won't wake the PC until you tap Edit
-            and correct it.
+        <View style={[styles.warning, { backgroundColor: theme.ground }]}>
+          <AlertIcon size={14} color={theme.dawnDeep} strokeWidth={1.9} />
+          <Text style={[styles.warningText, { color: theme.dawnDeep }]}>
+            This adapter’s MAC is {formatMac(active.mac)}. Wake won’t reach the PC until you tap
+            Edit and correct it.
           </Text>
         </View>
       )}
@@ -76,11 +83,28 @@ export default function NetworkInfo({ device, health, latencyMs, status, route }
   );
 }
 
-function Row({ label, value, muted, warn }: { label: string; value: string; muted?: boolean; warn?: boolean }) {
+function Row({
+  label,
+  value,
+  muted,
+  warn,
+}: {
+  label: string;
+  value: string;
+  muted?: boolean;
+  warn?: boolean;
+}) {
+  const { theme } = useTheme();
   return (
-    <View style={styles.row}>
-      <Text style={styles.rowLabel}>{label}</Text>
-      <Text style={[styles.rowValue, muted && styles.rowValueMuted, warn && styles.rowValueWarn]} numberOfLines={1}>
+    <View style={[styles.row, { borderTopColor: theme.ground }]}>
+      <Text style={[styles.rowLabel, { color: theme.ink3 }]}>{label}</Text>
+      <Text
+        style={[
+          styles.rowValue,
+          { color: warn ? theme.dawnDeep : muted ? theme.ink3 : theme.ink },
+        ]}
+        numberOfLines={1}
+      >
         {value}
       </Text>
     </View>
@@ -88,27 +112,9 @@ function Row({ label, value, muted, warn }: { label: string; value: string; mute
 }
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: '#1B1E27',
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    marginTop: 12,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingTop: 12,
-    paddingBottom: 8,
-  },
-  cardTitle: {
-    color: '#8A8F9C',
-    fontSize: 11,
-    fontWeight: '600',
-    letterSpacing: 1.1,
-    textTransform: 'uppercase',
-  },
+  card: { borderRadius: RADIUS.card, paddingHorizontal: 16, paddingVertical: 4, marginTop: 18 },
+  head: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 13, paddingBottom: 8 },
+  headText: { fontSize: 10, fontWeight: '800', letterSpacing: 1.2 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -116,21 +122,22 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingVertical: 9,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#2A2E3A',
   },
-  rowLabel: { color: '#8A8F9C', fontSize: 13 },
-  rowValue: { color: '#FFFFFF', fontSize: 13, fontVariant: ['tabular-nums'], flexShrink: 1, textAlign: 'right' },
-  rowValueMuted: { color: '#5A5F6B' },
-  rowValueWarn: { color: '#E0A33E' },
+  rowLabel: { fontSize: 12.5, fontWeight: '700' },
+  rowValue: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+    flexShrink: 1,
+    textAlign: 'right',
+  },
   warning: {
     flexDirection: 'row',
     gap: 8,
     alignItems: 'flex-start',
-    backgroundColor: '#2A2317',
-    borderRadius: 10,
-    padding: 10,
-    marginBottom: 12,
-    marginTop: 4,
+    borderRadius: 12,
+    padding: 11,
+    marginVertical: 10,
   },
-  warningText: { color: '#E0A33E', fontSize: 12, lineHeight: 17, flexShrink: 1 },
+  warningText: { fontSize: 12, lineHeight: 17, flexShrink: 1, fontWeight: '600' },
 });
