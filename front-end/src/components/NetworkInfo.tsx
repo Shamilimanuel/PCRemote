@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Device, DeviceStatus, HealthResponse, NetworkInterface } from '../types/device';
+import { Device, DeviceStatus, HealthResponse, NetworkInterface, Route } from '../types/device';
 import { NetworkIcon, AlertIcon } from './icons';
 
 type Props = {
@@ -8,6 +8,7 @@ type Props = {
   health: HealthResponse | null;
   latencyMs: number | null;
   status: DeviceStatus;
+  route: Route | null;
 };
 
 function normalizeMac(mac: string): string {
@@ -27,7 +28,7 @@ function activeInterface(device: Device, health: HealthResponse | null): Network
   return interfaces.find((entry) => entry.ip === device.ip) ?? interfaces[0];
 }
 
-export default function NetworkInfo({ device, health, latencyMs, status }: Props) {
+export default function NetworkInfo({ device, health, latencyMs, status, route }: Props) {
   const active = activeInterface(device, health);
   const offline = status !== 'online';
 
@@ -46,6 +47,13 @@ export default function NetworkInfo({ device, health, latencyMs, status }: Props
       <Row label="Host name" value={health?.hostname ?? (offline ? 'Unknown until online' : '—')} muted={offline} />
       <Row label="Adapter" value={active?.interface ?? (offline ? 'Unknown until online' : '—')} muted={offline} />
       <Row label="IP address" value={`${device.ip}:${device.port}`} />
+      {device.remoteHost ? (
+        <Row
+          label="Reached via"
+          value={route === 'remote' ? `${device.remoteHost} (away)` : route === 'local' ? 'Home Wi-Fi' : '—'}
+          muted={offline}
+        />
+      ) : null}
       <Row label="Subnet mask" value={active?.netmask ?? '—'} muted={offline} />
       <Row label="Wake broadcast" value={active?.broadcast ?? `${device.ip.split('.').slice(0, 3).join('.')}.255`} />
       <Row label="MAC address" value={formatMac(device.mac)} warn={macMismatch} />

@@ -38,7 +38,7 @@ const DESTRUCTIVE: ActionKey[] = ['shutdown', 'restart'];
 export default function ControlScreen({ device, onBack, onEdit }: Props) {
   const [busy, setBusy] = useState<ActionKey | null>(null);
   const [statusText, setStatusText] = useState<string | null>(null);
-  const { status, health, latencyMs, refresh } = useDeviceStatus(device);
+  const { status, health, latencyMs, route, refresh } = useDeviceStatus(device);
 
   async function run(actionKey: ActionKey) {
     setBusy(actionKey);
@@ -152,7 +152,7 @@ export default function ControlScreen({ device, onBack, onEdit }: Props) {
 
         {statusText && <Text style={styles.status}>{statusText}</Text>}
 
-        <NetworkInfo device={device} health={health} latencyMs={latencyMs} status={status} />
+        <NetworkInfo device={device} health={health} latencyMs={latencyMs} status={status} route={route} />
 
         <Text style={styles.footnote}>
           {agentUnreachable

@@ -166,6 +166,50 @@ agent's `/health` endpoint (tap the dot on the control screen to re-check immedi
 "Offline" just means the agent didn't answer — the PC is off, asleep, or not running it —
 so the actions that need the agent are dimmed and only **Start** is expected to work.
 
+## Home screen widget
+
+Long-press the home screen, pick **Widgets**, and drag **Reveille** out. It shows the
+first saved PC with its status and three buttons — Wake, Sleep, Lock — so the common
+actions don't need the app opened at all. Tapping the name opens the app for everything
+else.
+
+The widget runs through `react-native-android-widget`: `src/widget/ReveilleWidget.tsx`
+is the layout (Android renders it via RemoteViews, so only the widget primitives work
+there — no StyleSheet, no SVG), and `src/widget/taskHandler.tsx` handles adds,
+refreshes and taps in a headless JS context. There is no state between calls, so every
+render rebuilds from storage plus a fresh `/health` poll.
+
+Android refreshes widgets at most every 30 minutes on its own; taps refresh immediately,
+which is when it matters.
+
+## Using it away from home
+
+Everything except **Start** is plain HTTP, so it works anywhere the phone can reach the
+agent. [Tailscale](https://tailscale.com) is the least painful way to arrange that:
+install it on both the PC and the phone, sign in with the same account, and the PC gets a
+stable address that works from anywhere.
+
+Put that address in the app's **Remote address** field when adding or editing the PC. The
+LAN address is always tried first — at home nothing leaves the house — and the remote one
+is only used when the local address doesn't answer. The Network panel shows which one
+replied.
+
+Wake-on-LAN is the exception and always will be: a powered-off PC isn't running anything
+that could receive a forwarded packet, so **Start** only works on the same network.
+
+## Update notifications
+
+The app checks this repo's latest release on launch and shows a banner when there's a
+newer build. It needs no sign-in because the repo is public.
+
+The check works by comparing Android's `versionCode` against the release tag. The
+workflow sets `versionCode = 100 + <run number>` and tags the release `v1.0.<run number>`,
+so the two stay in lockstep — see `VERSION_CODE_BASE` in `src/lib/updates.ts` if that
+scheme ever changes.
+
+Installing a new build **over** the old one keeps every saved PC. Only uninstalling
+loses them.
+
 ## Security notes
 
 - The agent's token is a random secret generated per-install (`back-end/config.json`,
@@ -193,8 +237,9 @@ Reveille/
     ├── App.tsx           screen switching + device state
     └── src/
         ├── screens/      DeviceList, DeviceForm, Control
-        ├── components/   StatusPill, NetworkInfo, icons
+        ├── components/   StatusPill, NetworkInfo, UpdateBanner, icons
         ├── hooks/        useDeviceStatus (polls /health, measures latency)
+        ├── widget/       home screen widget + its headless task handler
         ├── lib/          api.ts (HTTP calls), wol.ts (magic packet), storage.ts
         └── types/
 ```
