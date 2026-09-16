@@ -161,21 +161,54 @@ export function Blob({
       accessibilityHint={hold ? 'Hold until the button fills' : undefined}
     >
       {hold && (
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            styles.charge,
-            {
-              backgroundColor: danger ? theme.danger : theme.dusk,
-              opacity: charge.interpolate({ inputRange: [0, 0.05, 1], outputRange: [0, 0.3, 0.45] }),
-              transform: [
-                { translateX: -CHARGE_WIDTH / 2 },
-                { scaleX: charge },
-                { translateX: CHARGE_WIDTH / 2 },
-              ],
-            },
-          ]}
-        />
+        <>
+          {/*
+            Rises from the bottom rather than sweeping across, and deepens as it
+            goes, so the button reads as filling up with the consequence. Red
+            whatever the button's own colour, because everything that holds is
+            something you cannot undo.
+          */}
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.charge,
+              {
+                backgroundColor: theme.danger,
+                opacity: charge.interpolate({
+                  inputRange: [0, 0.08, 0.75, 1],
+                  outputRange: [0, 0.22, 0.62, 0.92],
+                }),
+                transform: [
+                  { translateY: CHARGE_HEIGHT / 2 },
+                  { scaleY: charge },
+                  { translateY: -CHARGE_HEIGHT / 2 },
+                ],
+              },
+            ]}
+          />
+          {/* A brighter lip on the rising edge, so the level itself is visible. */}
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.chargeEdge,
+              {
+                backgroundColor: theme.danger,
+                opacity: charge.interpolate({
+                  inputRange: [0, 0.06, 1],
+                  outputRange: [0, 0.9, 0.35],
+                }),
+                transform: [
+                  {
+                    translateY: charge.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0, -CHARGE_HEIGHT],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          />
+        </>
       )}
 
       {busy ? (
@@ -305,16 +338,23 @@ export function ClaySwitch({
   );
 }
 
-// Wide enough that scaleX never leaves a gap at any sensible button size.
-const CHARGE_WIDTH = 400;
+// Taller than any button, so the rise never runs out before the hold does.
+const CHARGE_HEIGHT = 240;
 
 const styles = StyleSheet.create({
   charge: {
     position: 'absolute',
     left: 0,
-    top: 0,
+    right: 0,
     bottom: 0,
-    width: CHARGE_WIDTH,
+    height: CHARGE_HEIGHT,
+  },
+  chargeEdge: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 2.5,
   },
   blob: {
     flex: 1,

@@ -69,6 +69,17 @@ export default function NetworkInfo({ device, health, latencyMs, status, route }
         value={latencyMs === null ? t.noReply : `${latencyMs} ms`}
         muted={latencyMs === null}
       />
+      {/*
+        Without this the BIOS button is simply absent, which is indistinguishable
+        from it being broken. Saying "not set up" turns a mystery into a to-do.
+      */}
+      {health?.capabilities && (
+        <Row
+          label={t.biosRow}
+          value={health.capabilities.firmwareReboot ? t.biosReady : t.biosNotSetUp}
+          muted={!health.capabilities.firmwareReboot}
+        />
+      )}
 
       {macMismatch && active && (
         <View style={[styles.warning, { backgroundColor: theme.ground }]}>

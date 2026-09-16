@@ -102,6 +102,9 @@ export const en = {
   wakeBroadcast: 'Wake broadcast',
   macAddress: 'MAC address',
   responseTime: 'Response time',
+  biosRow: 'Reboot to BIOS',
+  biosReady: 'Available',
+  biosNotSetUp: 'Not set up on this PC',
   noReply: 'No reply',
   unknownUntilAwake: 'Unknown until awake',
   macMismatch: (mac: string) =>
@@ -314,6 +317,9 @@ export const nl: Strings = {
   wakeBroadcast: 'Wekadres',
   macAddress: 'MAC-adres',
   responseTime: 'Reactietijd',
+  biosRow: 'Naar BIOS',
+  biosReady: 'Beschikbaar',
+  biosNotSetUp: 'Niet ingesteld op deze pc',
   noReply: 'Geen antwoord',
   unknownUntilAwake: 'Pas bekend als hij wakker is',
   macMismatch: (mac: string) =>
