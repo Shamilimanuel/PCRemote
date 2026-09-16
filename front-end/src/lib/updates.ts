@@ -13,8 +13,27 @@ export type UpdateInfo = {
   releaseUrl: string;
 };
 
+/**
+ * Deliberately distinguishes "up to date" from "could not tell", because
+ * silently doing nothing on failure is indistinguishable from working, and
+ * that is how you end up not knowing whether updates work at all.
+ */
+export type UpdateCheck =
+  | { state: 'current'; installed: string }
+  | { state: 'available'; info: UpdateInfo }
+  | { state: 'error'; reason: string };
+
+export function installedVersionLabel(): string {
+  const name = Application.nativeApplicationVersion ?? '1.0.0';
+  const build = Application.nativeBuildVersion;
+  if (!build) return name;
+  const run = Number(build) - VERSION_CODE_BASE;
+  // Builds from this workflow can show the tag they came from; anything else
+  // (an old EAS build, a local one) just shows its raw build number.
+  return run > 0 ? `v1.0.${run}` : `${name} (build ${build})`;
+}
+
 function installedRun(): number | null {
-  // nativeBuildVersion is the Android versionCode, as a string.
   const raw = Application.nativeBuildVersion;
   if (!raw) return null;
   const code = Number(raw);
@@ -26,35 +45,62 @@ function releasedRun(tag: string): number | null {
   return m ? Number(m[1]) : null;
 }
 
-/**
- * Returns the newer release if there is one, otherwise null. Never throws --
- * a failed check should be silent, not a popup about GitHub being down.
- */
-export async function checkForUpdate(): Promise<UpdateInfo | null> {
+export async function checkForUpdateDetailed(): Promise<UpdateCheck> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 6000);
     const response = await fetch(RELEASES_API, {
       signal: controller.signal,
       headers: { Accept: 'application/vnd.github+json' },
     });
-    clearTimeout(timeout);
-    if (!response.ok) return null;
+
+    if (!response.ok) {
+      return {
+        state: 'error',
+        reason:
+          response.status === 403
+            ? 'GitHub is rate-limiting this network. Try again in a few minutes.'
+            : `GitHub replied ${response.status}.`,
+      };
+    }
 
     const release = await response.json();
     const here = installedRun();
     const there = releasedRun(release.tag_name ?? '');
-    if (here === null || there === null || there <= here) return null;
+
+    if (here === null) return { state: 'error', reason: 'Could not read this app’s version.' };
+    if (there === null) return { state: 'error', reason: 'The latest release has an odd name.' };
+    if (there <= here) return { state: 'current', installed: installedVersionLabel() };
 
     const apk = (release.assets ?? []).find((a: any) => String(a.name).endsWith('.apk'));
-    if (!apk) return null;
+    if (!apk) return { state: 'error', reason: 'That release has no app file attached.' };
 
     return {
-      version: release.tag_name,
-      downloadUrl: apk.browser_download_url,
-      releaseUrl: release.html_url,
+      state: 'available',
+      info: {
+        version: release.tag_name,
+        downloadUrl: apk.browser_download_url,
+        releaseUrl: release.html_url,
+      },
     };
-  } catch {
-    return null;
+  } catch (err) {
+    const aborted = (err as Error).name === 'AbortError';
+    return {
+      state: 'error',
+      reason: aborted ? 'GitHub did not answer in time.' : 'No internet connection.',
+    };
+  } finally {
+    clearTimeout(timeout);
   }
+}
+
+/**
+ * Returns the newer release if there is one, otherwise null. Never throws --
+ * the banner should stay quiet when the check fails, since Settings is where
+ * you go to find out why.
+ */
+export async function checkForUpdate(): Promise<UpdateInfo | null> {
+  const result = await checkForUpdateDetailed();
+  return result.state === 'available' ? result.info : null;
 }
