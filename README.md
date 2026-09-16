@@ -21,7 +21,34 @@ here).
 
 ## 1. Set up the PC agent
 
-Requires [Node.js](https://nodejs.org).
+Paste this into PowerShell on the PC you want to control:
+
+```powershell
+irm https://raw.githubusercontent.com/Shamilimanuel/PCRemote/main/setup.ps1 | iex
+```
+
+That installs Node.js if it's missing, puts the agent in `%LOCALAPPDATA%\Reveille`,
+sets it to start when you log in, checks it answers, and opens the pairing code for the
+phone to scan. No administrator rights needed.
+
+Run it again any time to upgrade — it keeps your token, so the phone stays paired.
+
+Options need the longer form, because `iex` can't take arguments:
+
+```powershell
+$s = 'https://raw.githubusercontent.com/Shamilimanuel/PCRemote/main/setup.ps1'
+
+& ([scriptblock]::Create((irm $s))) -Uninstall    # remove it all
+& ([scriptblock]::Create((irm $s))) -Firmware     # also allow "Reboot to BIOS"
+& ([scriptblock]::Create((irm $s))) -NoAutoStart  # don't start at login
+```
+
+`-Firmware` is the one step that asks for administrator, and it's opt-in. See
+[Rebooting into BIOS](#rebooting-into-bios).
+
+### Doing it by hand instead
+
+The installer is only convenience — nothing depends on it.
 
 ```bash
 cd back-end
@@ -29,48 +56,53 @@ npm install
 npm start
 ```
 
-On first run it generates a random auth token and prints everything you need:
+On first run it generates a random token and prints the details the app needs. To make it
+start automatically afterwards:
 
-```
-=========================================
- Reveille agent is running
-=========================================
-  Device name : YOUR-PC
-  Port        : 5533
-  Token       : <long random token>
-
-  Enter these details in the mobile app (pick the interface you use for Wi-Fi):
-   - [Wi-Fi] IP: 192.168.1.42   MAC: AA:BB:CC:DD:EE:FF
-=========================================
+```powershell
+powershell -ExecutionPolicy Bypass -File install-agent-task.ps1
 ```
 
-Keep this window open — the agent needs to be running for shutdown/restart/sleep/lock
-to work. Note the **IP address on the network adapter your PC actually uses (usually
-Wi-Fi)**, plus the **Token** and **MAC address**.
+That registers a Scheduled Task at your normal privilege level and launches the agent
+without a console window. `uninstall-agent-task.ps1` removes it.
+
+### Showing the pairing code
+
+```bash
+cd back-end
+npm run pair
+```
+
+Opens a page in your browser with a large QR code and the same values in text. The agent
+runs hidden once it starts automatically, so anything it prints to its own window goes
+nowhere — this script is how you see the code.
 
 ### Enable Wake-on-LAN (required for "Start")
 
 Power-on only works if Wake-on-LAN is enabled for your network adapter:
 
 1. **BIOS/UEFI**: enable "Wake on LAN" / "Power On by PCI-E" in power settings.
-2. **Windows**: Device Manager → your network adapter → Properties → Power Management →
+2. **Windows**: Device Manager -> your network adapter -> Properties -> Power Management ->
    check "Allow this device to wake the computer". Also check the Advanced tab for a
    "Wake on Magic Packet" setting and set it to Enabled.
-3. Wired Ethernet adapters support this far more reliably than Wi-Fi adapters — if your
+3. Wired Ethernet adapters support this far more reliably than Wi-Fi adapters -- if your
    Wi-Fi card doesn't support WOL (many don't), connect via Ethernet or use Start only
    when the PC is already on standby via one of the other actions.
+4. Turn **Fast Startup** off. Windows otherwise performs a partial hibernate instead of a
+   real shutdown, and many adapters lose their wake arming in that state.
 
-### Run the agent automatically at login (optional)
+### Rebooting into BIOS
 
-From an elevated PowerShell prompt in `back-end/`:
+Optional, and off by default. `shutdown /r /fw` restarts straight into the firmware
+settings screen, but it needs administrator rights -- which the agent deliberately does
+not have, since it listens on the network.
 
-```powershell
-powershell -ExecutionPolicy Bypass -File install-agent-task.ps1
-```
+Rather than elevating the agent, `install-firmware-task.ps1` registers one elevated
+Scheduled Task that runs exactly that command and takes no arguments. The agent can ask
+Task Scheduler to start it but cannot change what it does, so the extra authority this
+grants -- even if the token leaked -- is "reboot to firmware" and nothing else.
 
-This registers a Scheduled Task that starts the agent whenever you log in (including
-after a Wake-on-LAN boot). To remove it later, run `uninstall-agent-task.ps1` the same
-way.
+Requires UEFI. The app hides the button unless the agent reports the task is installed.
 
 ## 2. Build the phone app
 
