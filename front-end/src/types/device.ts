@@ -12,7 +12,7 @@ export type Device = {
   remoteHost?: string;
 };
 
-export type PendingAction = 'shutdown' | 'restart' | 'sleep' | 'lock' | null;
+export type PendingAction = 'shutdown' | 'restart' | 'sleep' | 'lock' | 'firmware' | null;
 
 export type NetworkInterface = {
   interface: string;
@@ -30,6 +30,14 @@ export type HealthResponse = {
   uptimeSeconds: number;
   /** Absent when talking to an agent older than the network-info change. */
   interfaces?: NetworkInterface[];
+  /**
+   * What this particular PC is set up to do. Absent on older agents, which is
+   * treated the same as "not available".
+   */
+  capabilities?: {
+    /** True once install-firmware-task.ps1 has been run on the PC. */
+    firmwareReboot?: boolean;
+  };
 };
 
 /**

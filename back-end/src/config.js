@@ -43,6 +43,21 @@ function broadcastAddress(ip, netmask) {
   return ipParts.map((part, i) => part | (~maskParts[i] & 255)).join('.');
 }
 
+// Adapters that exist but aren't the one the phone will reach us on. Virtual
+// machine bridges in particular hand out addresses that look perfectly valid
+// and go nowhere, and they often sort first.
+const VIRTUAL_ADAPTER = /virtual|vmware|vbox|hyper-?v|loopback|bluetooth|docker|wsl|tailscale|zerotier|tap-|tun\d/i;
+
+function rank(entry) {
+  let score = 0;
+  if (VIRTUAL_ADAPTER.test(entry.interface)) score -= 100;
+  if (entry.ip.startsWith('192.168.56.')) score -= 50;   // VirtualBox host-only default
+  if (entry.ip.startsWith('169.254.')) score -= 80;      // link-local: DHCP never answered
+  if (/^(ethernet|eth)/i.test(entry.interface)) score += 10;
+  if (/wi-?fi|wlan/i.test(entry.interface)) score += 8;
+  return score;
+}
+
 function getPrimaryNetworkInfo() {
   const interfaces = os.networkInterfaces();
   const candidates = [];
@@ -62,12 +77,17 @@ function getPrimaryNetworkInfo() {
     }
   }
 
-  return candidates;
+  // Best guess first, so callers that just take [0] get the right adapter.
+  return candidates
+    .map((entry, index) => ({ entry, index, score: rank(entry) }))
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .map((x) => x.entry);
 }
 
 module.exports = {
   CONFIG_PATH,
   broadcastAddress,
+  VIRTUAL_ADAPTER,
   loadOrCreateConfig,
   saveConfig,
   generateToken,

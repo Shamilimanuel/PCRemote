@@ -17,6 +17,7 @@ import StatusPill from '../components/StatusPill';
 import NetworkInfo from '../components/NetworkInfo';
 import {
   AbortIcon,
+  ChipIcon,
   IconProps,
   LockIcon,
   MoonIcon,
@@ -31,9 +32,9 @@ type Props = {
   onEdit: () => void;
 };
 
-type ActionKey = 'start' | 'shutdown' | 'restart' | 'sleep' | 'lock' | 'cancel';
+type ActionKey = 'start' | 'shutdown' | 'restart' | 'sleep' | 'lock' | 'cancel' | 'firmware';
 
-const DESTRUCTIVE: ActionKey[] = ['shutdown', 'restart'];
+const DESTRUCTIVE: ActionKey[] = ['shutdown', 'restart', 'firmware'];
 
 export default function ControlScreen({ device, onBack, onEdit }: Props) {
   const [busy, setBusy] = useState<ActionKey | null>(null);
@@ -69,6 +70,8 @@ export default function ControlScreen({ device, onBack, onEdit }: Props) {
         `${labelFor(actionKey)} ${device.name}?`,
         actionKey === 'shutdown'
           ? 'The PC will power off in a few seconds.'
+          : actionKey === 'firmware'
+          ? 'The PC will restart into its BIOS/UEFI settings screen. You’ll need to be at the keyboard — the phone can’t control it from there.'
           : 'The PC will restart in a few seconds.',
         [
           { text: 'Cancel', style: 'cancel' },
@@ -150,6 +153,29 @@ export default function ControlScreen({ device, onBack, onEdit }: Props) {
           />
         </View>
 
+        {health?.capabilities?.firmwareReboot ? (
+          <Pressable
+            style={({ pressed }) => [
+              styles.firmwareButton,
+              agentUnreachable && styles.actionButtonDimmed,
+              pressed && styles.actionButtonPressed,
+            ]}
+            onPress={() => handlePress('firmware')}
+            disabled={busy === 'firmware'}
+            accessibilityRole="button"
+            accessibilityLabel="Reboot to BIOS"
+          >
+            {busy === 'firmware' ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <>
+                <ChipIcon size={19} color="#8A8F9C" strokeWidth={1.7} />
+                <Text style={styles.firmwareLabel}>Reboot to BIOS</Text>
+              </>
+            )}
+          </Pressable>
+        ) : null}
+
         {statusText && <Text style={styles.status}>{statusText}</Text>}
 
         <NetworkInfo device={device} health={health} latencyMs={latencyMs} status={status} route={route} />
@@ -178,6 +204,8 @@ function labelFor(action: ActionKey) {
       return 'Lock';
     case 'cancel':
       return 'Cancel';
+    case 'firmware':
+      return 'Reboot to BIOS';
   }
 }
 
@@ -243,6 +271,18 @@ const styles = StyleSheet.create({
   actionButtonDanger: { backgroundColor: '#3A1E22' },
   actionButtonDimmed: { opacity: 0.4 },
   actionButtonPressed: { opacity: 0.7 },
+  firmwareButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 9,
+    marginTop: 12,
+    paddingVertical: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#2A2E3A',
+  },
+  firmwareLabel: { color: '#8A8F9C', fontWeight: '600', fontSize: 14 },
   spinner: { height: 26 },
   actionLabel: { color: '#FFFFFF', fontWeight: '600' },
   status: { color: '#5FD68C', marginTop: 18, textAlign: 'center' },
