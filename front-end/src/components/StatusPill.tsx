@@ -1,0 +1,32 @@
+import React from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+import { DeviceStatus } from '../types/device';
+
+const LABELS: Record<DeviceStatus, string> = {
+  unknown: 'Checking…',
+  online: 'Online',
+  offline: 'Offline',
+};
+
+const COLORS: Record<DeviceStatus, string> = {
+  unknown: '#8A8F9C',
+  online: '#5FD68C',
+  offline: '#5A5F6B',
+};
+
+export default function StatusPill({ status, detail }: { status: DeviceStatus; detail?: string }) {
+  return (
+    <View style={styles.row}>
+      <View style={[styles.dot, { backgroundColor: COLORS[status] }]} />
+      <Text style={[styles.label, { color: COLORS[status] }]}>{LABELS[status]}</Text>
+      {detail ? <Text style={styles.detail}>{detail}</Text> : null}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  row: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  dot: { width: 8, height: 8, borderRadius: 4 },
+  label: { fontSize: 13, fontWeight: '600' },
+  detail: { color: '#5A5F6B', fontSize: 13 },
+});
