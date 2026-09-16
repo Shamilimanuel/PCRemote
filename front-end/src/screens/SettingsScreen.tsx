@@ -1,13 +1,17 @@
-import React from 'react';
-import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, Pressable, ScrollView, StyleSheet, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import * as Application from 'expo-application';
+import {
+  checkForUpdateDetailed,
+  installedVersionLabel,
+  UpdateCheck,
+} from '../lib/updates';
 import { useTheme } from '../theme/ThemeContext';
 import { THEMES, ThemeName, RADIUS, raised, sunken, filled } from '../theme/clay';
 import { POLL_CHOICES } from '../lib/settings';
 import { Surface, ClaySwitch, ClayButton } from '../components/Clay';
 import { play } from '../lib/sound';
-import { tapFeedback } from '../lib/haptics';
+import { successFeedback, failureFeedback, tapFeedback } from '../lib/haptics';
 
 const ORDER: ThemeName[] = ['dawn', 'dusk', 'midnight'];
 
@@ -119,20 +123,81 @@ export default function SettingsScreen({ onBack }: { onBack: () => void }) {
           }
         />
 
-        <Label>About</Label>
-        <Surface inset style={styles.aboutCard}>
-          <Text style={[styles.aboutLine, { color: theme.ink2 }]}>
-            Reveille {Application.nativeApplicationVersion ?? '1.0.0'}
-            {Application.nativeBuildVersion ? `  ·  build ${Application.nativeBuildVersion}` : ''}
-          </Text>
-          <Text style={[styles.aboutHint, { color: theme.ink3 }]}>
-            The app checks for a newer version each time it opens.
-          </Text>
-        </Surface>
+        <Label>Version</Label>
+        <UpdateSection />
 
         <ClayButton label="Done" tone="accent" onPress={onBack} style={styles.done} />
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+/**
+ * Says what happened, every time. The banner on the device list is passive and
+ * stays quiet when a check fails, which is indistinguishable from "no update" --
+ * this is where you come to find out which it was.
+ */
+function UpdateSection() {
+  const { theme } = useTheme();
+  const [state, setState] = useState<'idle' | 'checking'>('idle');
+  const [result, setResult] = useState<UpdateCheck | null>(null);
+
+  async function check() {
+    setState('checking');
+    setResult(null);
+    const outcome = await checkForUpdateDetailed();
+    setResult(outcome);
+    setState('idle');
+    if (outcome.state === 'error') {
+      play('fail');
+      failureFeedback();
+    } else {
+      play('done');
+      successFeedback();
+    }
+  }
+
+  const tone =
+    result?.state === 'available' ? theme.dusk : result?.state === 'error' ? theme.danger : theme.moss;
+
+  return (
+    <Surface inset style={styles.aboutCard}>
+      <Text style={[styles.aboutLine, { color: theme.ink }]}>
+        Reveille {installedVersionLabel()}
+      </Text>
+
+      {result && (
+        <Text style={[styles.aboutStatus, { color: tone }]}>
+          {result.state === 'current'
+            ? 'This is the newest version.'
+            : result.state === 'available'
+            ? `${result.info.version} is available.`
+            : result.reason}
+        </Text>
+      )}
+
+      {!result && (
+        <Text style={[styles.aboutHint, { color: theme.ink3 }]}>
+          Reveille also looks for a newer version each time you open it.
+        </Text>
+      )}
+
+      <ClayButton
+        label={state === 'checking' ? 'Checking…' : 'Check for updates'}
+        busy={state === 'checking'}
+        onPress={check}
+        style={styles.aboutAction}
+      />
+
+      {result?.state === 'available' && (
+        <ClayButton
+          label={`Download ${result.info.version}`}
+          tone="accent"
+          onPress={() => Linking.openURL(result.info.downloadUrl)}
+          style={styles.aboutAction}
+        />
+      )}
+    </Surface>
   );
 }
 
@@ -196,6 +261,8 @@ const styles = StyleSheet.create({
   aboutCard: { borderRadius: RADIUS.field, padding: 15 },
   aboutLine: { fontSize: 13, fontWeight: '700' },
   aboutHint: { fontSize: 11.5, fontWeight: '600', marginTop: 4, lineHeight: 16 },
+  aboutStatus: { fontSize: 12.5, fontWeight: '800', marginTop: 5, lineHeight: 18 },
+  aboutAction: { marginTop: 12 },
 
   done: { marginTop: 28 },
 });
