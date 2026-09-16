@@ -458,8 +458,15 @@ if ($blocked) {
     Write-Host ''
 }
 
-Write-Host '  Get the app:' -ForegroundColor White
+Write-Host '  Get the Android app:' -ForegroundColor White
 Write-Dim "  https://github.com/$Repo/releases/latest"
+Write-Host ''
+Write-Host '  Or use any browser -- iPhone, iPad, laptop:' -ForegroundColor White
+$primary = $health.interfaces | Select-Object -First 1
+if ($primary) {
+    Write-Dim "  http://$($primary.ip):$(Read-AgentPort -Destination $InstallDir)"
+    Write-Dim '  (everything except Wake, which a browser is not allowed to send)'
+}
 Write-Host ''
 Write-Host '  To show the pairing code again later:' -ForegroundColor White
 Write-Dim "  cd `"$InstallDir`"; npm run pair"
