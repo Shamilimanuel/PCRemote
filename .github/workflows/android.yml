@@ -134,9 +134,19 @@ jobs:
             echo "- SHA-256: \`${SUM}\`"
           } > notes.md
 
-          gh release create "$TAG" "$APK" \
-            --repo "$GITHUB_REPOSITORY" \
-            --title "Reveille $TAG" \
-            --notes-file notes.md \
-            --latest
+          # A push that does not bump the version would otherwise fail here:
+          # `gh release create` refuses a tag that already exists, and that is
+          # exactly what a docs or workflow change looks like. Replace the
+          # asset on the existing release instead of falling over.
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $TAG already exists - replacing its APK."
+            gh release upload "$TAG" "$APK" --repo "$GITHUB_REPOSITORY" --clobber
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file notes.md
+          else
+            gh release create "$TAG" "$APK" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "Reveille $TAG" \
+              --notes-file notes.md \
+              --latest
+          fi
         working-directory: .
