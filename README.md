@@ -24,7 +24,7 @@ here).
 Paste this into PowerShell on the PC you want to control:
 
 ```powershell
-irm https://raw.githubusercontent.com/Shamilimanuel/PCRemote/main/setup.ps1 | iex
+irm github.com/Shamilimanuel/PCRemote/raw/main/setup.ps1 | iex
 ```
 
 That installs Node.js if it's missing, puts the agent in `%LOCALAPPDATA%\Reveille`,
@@ -33,21 +33,40 @@ phone to scan. No administrator rights needed.
 
 Run it again any time to upgrade — it keeps your token, so the phone stays paired.
 
-Partway through it asks whether you want a **Reboot to BIOS** button, explains
-exactly what saying yes grants, and carries on either way. That is the only part
+Run it again later and it offers a menu instead of silently reinstalling —
+update, repair, show the pairing code, or remove. The one line is the only thing
+worth memorising, so it is the way in to everything.
+
+Partway through a first install it asks whether you want a **Reboot to BIOS**
+button, explains exactly what saying yes grants, and carries on either way. That is the only part
 that needs administrator, and it is a question rather than an assumption — see
 [Rebooting into BIOS](#rebooting-into-bios).
 
 Options need the longer form, because `iex` can't take arguments:
 
 ```powershell
-$s = 'https://raw.githubusercontent.com/Shamilimanuel/PCRemote/main/setup.ps1'
+$s = 'github.com/Shamilimanuel/PCRemote/raw/main/setup.ps1'
 
 & ([scriptblock]::Create((irm $s))) -Uninstall     # remove it all
 & ([scriptblock]::Create((irm $s))) -Firmware      # say yes without being asked
 & ([scriptblock]::Create((irm $s))) -NoFirmware    # skip the question
 & ([scriptblock]::Create((irm $s))) -NoAutoStart   # don't start at login
 ```
+
+### Making the install line shorter
+
+62 characters is as short as this gets for free. Two things buy that over the
+raw URL: `github.com/<user>/<repo>/raw/...` redirects to `raw.githubusercontent`
+and keeps the `text/plain` content type `iex` needs, and PowerShell accepts a URL
+with no scheme.
+
+Anything genuinely memorable — `irm reveille.sh | iex` — needs a domain you own,
+pointed at the raw file with a 301. See `docs/short-link.md` on the
+`short-install-url` branch.
+
+**Do not use a public URL shortener for this.** Whoever controls that link
+controls what runs on the machine, and `iex` runs it without showing you first.
+A redirect is only safe when the redirect is yours.
 
 ### Doing it by hand instead
 
@@ -369,7 +388,7 @@ copyright line.
 Everything here works for anyone, not just the machine it was built on:
 
 ```powershell
-irm https://raw.githubusercontent.com/Shamilimanuel/PCRemote/main/setup.ps1 | iex
+irm github.com/Shamilimanuel/PCRemote/raw/main/setup.ps1 | iex
 ```
 
 The agent generates its own token on first run, so each install is independent.

@@ -1,6 +1,7 @@
 const os = require('os');
 const { loadOrCreateConfig, getPrimaryNetworkInfo } = require('./config');
 const { createServer } = require('./server');
+const { startWatching } = require('./updates');
 
 const config = loadOrCreateConfig();
 const netInfo = getPrimaryNetworkInfo();
@@ -33,6 +34,10 @@ app.listen(config.port, '0.0.0.0', () => {
   console.log('   agent starts automatically, so its output never reaches you.)');
   console.log('=========================================');
   console.log('');
+
+  // The agent has no window, so a toast is the only way it can tell you the PC
+  // half has fallen behind. The phone app checks releases; this checks main.
+  startWatching();
 });
 
 // A crash inside the listen callback used to take the agent down silently,

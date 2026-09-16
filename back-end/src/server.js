@@ -13,6 +13,7 @@ const {
 } = require('./commands');
 const { getPrimaryNetworkInfo } = require('./config');
 const { collect } = require('./stats');
+const updates = require('./updates');
 
 function timingSafeEqual(a, b) {
   const bufA = Buffer.from(a);
@@ -74,6 +75,9 @@ function createServer(config) {
       // What the machine is actually doing, so the app can be a window as well
       // as a switch.
       stats: await collect(),
+      // So the phone can show that the PC half needs updating too, not just
+      // its own app.
+      agent: updates.status(),
       // Present only while a timed shutdown or restart is counting down.
       pending: pending
         ? {

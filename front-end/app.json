@@ -2,7 +2,7 @@
   "expo": {
     "name": "Reveille",
     "slug": "reveille",
-    "version": "1.0.11",
+    "version": "1.0.12",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "reveille",
@@ -11,7 +11,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.shami.pcremote",
-      "buildNumber": "10011",
+      "buildNumber": "10012",
       "infoPlist": {
         "NSAppTransportSecurity": {
           "NSAllowsLocalNetworking": true
@@ -25,7 +25,7 @@
     },
     "android": {
       "package": "com.shami.pcremote",
-      "versionCode": 10011,
+      "versionCode": 10012,
       "adaptiveIcon": {
         "backgroundColor": "#111926",
         "foregroundImage": "./assets/android-icon-foreground.png",
