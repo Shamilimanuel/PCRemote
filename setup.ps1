@@ -25,14 +25,16 @@
 param(
     # Remove the agent, its scheduled tasks and its files.
     [switch]$Uninstall,
-    # Also grant the "Reboot to BIOS" power. Prompts for administrator.
+    # Grant the "Reboot to BIOS" power without being asked about it.
     [switch]$Firmware,
     # Where to install. Defaults to %LOCALAPPDATA%\Reveille.
     [string]$Path,
     # Skip opening the pairing page at the end.
     [switch]$NoPair,
     # Install without registering it to start at login.
-    [switch]$NoAutoStart
+    [switch]$NoAutoStart,
+    # Skip the reboot-to-BIOS question entirely. For scripted installs.
+    [switch]$NoFirmware
 )
 
 $ErrorActionPreference = 'Stop'
@@ -232,6 +234,64 @@ function Install-FirmwareTask {
     }
 }
 
+# ------------------------------------------------------------ bios prompt --
+
+function Test-Uefi {
+    $firmware = $env:firmware_type
+    if ($firmware) { return $firmware -ne 'Legacy' }
+    # Not every Windows build sets that variable; the Secure Boot key only
+    # exists on UEFI machines either way.
+    return (Test-Path 'HKLM:\SYSTEM\CurrentControlSet\Control\SecureBoot\State')
+}
+
+<#
+    Asks whether to add the "Reboot to BIOS" button, and says plainly what
+    saying yes grants.
+
+    It is a separate question rather than part of the install because it is the
+    only thing here that needs administrator rights. Everything else the agent
+    does affects your own session and needs nothing special, and keeping it that
+    way is the point -- a program listening on the network should hold as little
+    authority as it can.
+#>
+function Confirm-Firmware {
+    if (-not (Test-Uefi)) {
+        Write-Dim 'This PC boots in legacy BIOS mode, so Windows cannot restart into firmware. Skipping.'
+        return $false
+    }
+    if (Get-ScheduledTask -TaskName $FirmwareTask -ErrorAction SilentlyContinue) {
+        Write-Dim 'Reboot to BIOS is already set up.'
+        return $false
+    }
+    # Read-Host needs a console. A piped or scheduled run gets a quiet no.
+    if (-not [Environment]::UserInteractive) { return $false }
+
+    Write-Host ''
+    Write-Host '  ------------------------------------------------' -ForegroundColor DarkGray
+    Write-Host '  Optional: add a "Reboot to BIOS" button?' -ForegroundColor White
+    Write-Host ''
+    Write-Dim '  Restarts this PC straight into its BIOS/UEFI settings'
+    Write-Dim '  screen, from the phone.'
+    Write-Host ''
+    Write-Dim '  Saying yes:'
+    Write-Dim '   - asks Windows for administrator once, right now'
+    Write-Dim '   - creates one task that runs exactly one command:'
+    Write-Dim '     shutdown /r /fw  (restart into firmware)'
+    Write-Host ''
+    Write-Dim '  It grants nothing else. The agent stays unprivileged and'
+    Write-Dim '  cannot change what that task does -- only ask it to run.'
+    Write-Dim '  So the most anyone could do with a stolen token is reboot'
+    Write-Dim '  this PC into its settings screen.'
+    Write-Host ''
+    Write-Dim '  Saying no changes nothing. Everything else works the same,'
+    Write-Dim '  and you can add it later by running this again.'
+    Write-Host '  ------------------------------------------------' -ForegroundColor DarkGray
+    Write-Host ''
+
+    $answer = Read-Host '  Add the Reboot to BIOS button? (y/N)'
+    return $answer -match '^\s*(y|yes|j|ja)\s*$'
+}
+
 # -------------------------------------------------------------------- verify --
 
 # An older install -- or a copy started by hand -- will still be holding the
@@ -327,7 +387,16 @@ if (-not $health) {
     exit 1
 }
 
-if ($Firmware) { Install-FirmwareTask -Destination $InstallDir }
+# Ask rather than expecting anyone to have known about a flag.
+if ($Firmware) {
+    Install-FirmwareTask -Destination $InstallDir
+} elseif (-not $NoFirmware) {
+    if (Confirm-Firmware) {
+        Install-FirmwareTask -Destination $InstallDir
+    } else {
+        Write-Dim 'Skipped. Run this again any time to add it.'
+    }
+}
 
 # Windows Firewall prompts on first listen; if it was dismissed, say so rather
 # than letting the phone fail with a silent timeout.
