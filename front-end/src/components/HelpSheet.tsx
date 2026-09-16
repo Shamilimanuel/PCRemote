@@ -3,8 +3,10 @@ import { Modal, View, Text, Pressable, ScrollView, StyleSheet } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeContext';
 
-const SETUP_COMMAND =
-  'irm https://raw.githubusercontent.com/Shamilimanuel/PCRemote/main/setup.ps1 | iex';
+// Shorter than the raw.githubusercontent form and serves the same file:
+// github.com/<user>/<repo>/raw/ redirects there and keeps the text/plain
+// content type that `iex` needs. Short enough to read off a phone screen.
+const SETUP_COMMAND = 'irm github.com/Shamilimanuel/PCRemote/raw/main/setup.ps1 | iex';
 
 type Props = {
   visible: boolean;

@@ -1,7 +1,7 @@
 <#
     Reveille -- one-line setup for the PC agent.
 
-        irm https://raw.githubusercontent.com/Shamilimanuel/PCRemote/main/setup.ps1 | iex
+        irm github.com/Shamilimanuel/PCRemote/raw/main/setup.ps1 | iex
 
     Installs the agent under %LOCALAPPDATA%\Reveille, makes it start when you
     log in, and finishes by opening the pairing code for the phone to scan.
@@ -239,6 +239,20 @@ function Get-AgentFiles {
         [System.IO.File]::WriteAllText($existingConfig, $savedConfig, (New-Object System.Text.UTF8Encoding $false))
     }
 
+    # Record which commit this copy came from. The agent compares it against
+    # main to notice when the PC half has fallen behind -- it is fetched from a
+    # branch, not a release, so a commit is the only honest version it has.
+    try {
+        $head = Invoke-RestMethod "https://api.github.com/repos/$Repo/commits/$Branch" `
+            -Headers @{ 'User-Agent' = 'reveille-setup' } -TimeoutSec 10
+        $stamp = @{ sha = $head.sha; installedAt = (Get-Date).ToString('o') } | ConvertTo-Json
+        [System.IO.File]::WriteAllText(
+            (Join-Path $Destination 'installed.json'), $stamp,
+            (New-Object System.Text.UTF8Encoding $false))
+    } catch {
+        Write-Dim 'could not record the installed version (update checks will stay quiet)'
+    }
+
     Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
     Write-Dim "installed to $Destination"
 }
@@ -470,6 +484,62 @@ function Test-Agent {
     return $null
 }
 
+# ----------------------------------------------------------------- menu --
+
+<#
+    Shown when an install already exists and nobody passed a flag.
+
+    The one-line command is the only thing anyone memorises, so it has to be
+    the way in to everything -- not just first-time install. Typing the same
+    line again should let you update, repair or remove, rather than silently
+    reinstalling and leaving you to find the flags in a README.
+#>
+function Show-Menu {
+    param([string]$Destination)
+
+    $installed = $null
+    $stamp = Join-Path $Destination 'installed.json'
+    if (Test-Path $stamp) {
+        try { $installed = (Get-Content $stamp -Raw | ConvertFrom-Json).sha } catch { }
+    }
+
+    Write-Host '  Reveille is already installed here:' -ForegroundColor White
+    Write-Dim "  $Destination"
+    if ($installed) { Write-Dim "  version $($installed.Substring(0,7))" }
+
+    $running = Get-NetTCPConnection -LocalPort (Read-AgentPort -Destination $Destination) `
+        -State Listen -ErrorAction SilentlyContinue
+    if ($running) { Write-Ok '  The agent is running.' } else { Write-Warn2 '  The agent is not running.' }
+
+    Write-Host ''
+    Write-Host '   1  Update to the latest version' -ForegroundColor White
+    Write-Host '   2  Repair  ' -ForegroundColor White -NoNewline
+    Write-Dim '(reinstall, re-register, restart)'
+    Write-Host '   3  Show the pairing code' -ForegroundColor White
+    Write-Host '   4  Remove Reveille' -ForegroundColor White
+    Write-Host '   Q  Quit' -ForegroundColor White
+    Write-Host ''
+
+    $choice = Read-Host '  Choose'
+    switch ($choice.Trim().ToUpper()) {
+        '1' { return 'update' }
+        '2' { return 'repair' }
+        '3' { return 'pair' }
+        '4' { return 'remove' }
+        'Q' { return 'quit' }
+        default {
+            Write-Warn2 '  Not one of the options.'
+            return 'quit'
+        }
+    }
+}
+
+function Show-PairingCode {
+    param([string]$Destination, [string]$NodePath)
+    Push-Location $Destination
+    try { & $NodePath 'pair.js' } finally { Pop-Location }
+}
+
 # ---------------------------------------------------------------------- main --
 
 if ($Uninstall) { Invoke-Uninstall; return }
@@ -477,6 +547,22 @@ if ($Uninstall) { Invoke-Uninstall; return }
 Write-Banner
 
 $nodePath = Resolve-Node
+
+# An existing install and no flags means the user typed the one-line command
+# again on purpose. Ask what they want rather than assuming.
+$alreadyInstalled = Test-Path (Join-Path $InstallDir 'package.json')
+$repairing = $false
+if ($alreadyInstalled -and -not $Firmware -and -not $NoAutoStart -and
+    -not $NoPair -and [Environment]::UserInteractive) {
+
+    switch (Show-Menu -Destination $InstallDir) {
+        'quit'   { Write-Host ''; return }
+        'remove' { Invoke-Uninstall; return }
+        'pair'   { Show-PairingCode -Destination $InstallDir -NodePath $nodePath; return }
+        'repair' { $repairing = $true; Write-Host '' }
+        'update' { Write-Host '' }
+    }
+}
 Get-AgentFiles -Destination $InstallDir
 
 Write-Step 'Installing what it needs...'
@@ -491,7 +577,8 @@ try {
 if ($NoAutoStart) {
     Write-Dim 'skipping the start-at-login step, as asked'
 } else {
-    Write-Step 'Setting it to start with Windows...'
+    Write-Step $(if ($repairing) { 'Re-registering the start-at-login task...' }
+                 else { 'Setting it to start with Windows...' })
     Register-Agent -Destination $InstallDir
 }
 
