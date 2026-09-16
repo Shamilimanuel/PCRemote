@@ -124,7 +124,7 @@ export default function DeviceFormScreen({
           label="IP address"
           value={ip}
           onChangeText={setIp}
-          placeholder="192.168.1.42"
+          placeholder="10.0.0.25"
           keyboardType="numbers-and-punctuation"
         />
         <Field
