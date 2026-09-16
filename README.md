@@ -68,6 +68,25 @@ pointed at the raw file with a 301. See `docs/short-link.md` on the
 controls what runs on the machine, and `iex` runs it without showing you first.
 A redirect is only safe when the redirect is yours.
 
+### If Windows says scripts are disabled
+
+> `... cannot be loaded because running scripts is disabled on this system.`
+
+A fresh Windows install refuses to run any PowerShell script file. The one-line
+installer is unaffected — `iex` runs a string, not a file — and it calls
+`npm.cmd` rather than `npm` precisely so it keeps working on an untouched
+machine. (`npm` in PowerShell resolves to `npm.ps1`, which is a script file.)
+
+You only meet this if you run the `.ps1` helpers by hand. To allow your own
+scripts while still requiring downloaded ones to be signed:
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+```
+
+That is a real security setting. `RemoteSigned` is the sensible middle — it does
+not disable anything for files that came from the internet.
+
 ### Doing it by hand instead
 
 The installer is only convenience — nothing depends on it.
@@ -92,7 +111,7 @@ without a console window. `uninstall-agent-task.ps1` removes it.
 
 ```bash
 cd back-end
-npm run pair
+node pair.js
 ```
 
 Opens a page in your browser with a large QR code and the same values in text. The agent

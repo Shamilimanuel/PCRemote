@@ -540,6 +540,34 @@ function Show-PairingCode {
     try { & $NodePath 'pair.js' } finally { Pop-Location }
 }
 
+# --------------------------------------------------- execution policy --
+
+<#
+    Reveille does not need PowerShell's execution policy changed: the one thing
+    that would have tripped over it, npm, is called through npm.cmd instead.
+
+    But the helper scripts here are .ps1 files, and a machine on the Windows
+    default refuses to run those at all. Worth saying once, plainly, rather
+    than letting someone hit it later and assume the install was broken.
+#>
+function Show-PolicyNote {
+    $policy = Get-ExecutionPolicy -Scope CurrentUser
+    if ($policy -notin @('Restricted', 'AllSigned', 'Undefined')) { return }
+
+    $effective = Get-ExecutionPolicy
+    if ($effective -notin @('Restricted', 'AllSigned')) { return }
+
+    Write-Host ''
+    Write-Warn2 '  Windows is set to block PowerShell script files on this PC.'
+    Write-Dim   '  Reveille works anyway -- nothing it installs needs that changed.'
+    Write-Dim   '  It only matters if you later want to run one of the .ps1 helper'
+    Write-Dim   '  scripts here by hand. If you do, this allows your own scripts'
+    Write-Dim   '  while still requiring downloaded ones to be signed:'
+    Write-Host ''
+    Write-Dim   '    Set-ExecutionPolicy -Scope CurrentUser RemoteSigned'
+    Write-Host ''
+}
+
 # ---------------------------------------------------------------------- main --
 
 if ($Uninstall) { Invoke-Uninstall; return }
@@ -568,7 +596,12 @@ Get-AgentFiles -Destination $InstallDir
 Write-Step 'Installing what it needs...'
 Push-Location $InstallDir
 try {
-    & npm install --omit=dev --no-audit --no-fund --loglevel=error 2>&1 | Out-Null
+    # npm.cmd, not npm. In PowerShell `npm` resolves to npm.ps1, and a fresh
+    # Windows install refuses to run any .ps1 at all -- "cannot be loaded
+    # because running scripts is disabled on this system". The .cmd shim does
+    # the same job and no execution policy applies to it, so the installer
+    # works on a machine whose settings have never been touched.
+    & npm.cmd install --omit=dev --no-audit --no-fund --loglevel=error 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'npm install failed. Check your internet connection and try again.' }
 } finally {
     Pop-Location
@@ -651,8 +684,10 @@ if ($primary) {
     Write-Dim '  (everything except Wake, which a browser is not allowed to send)'
 }
 Write-Host ''
+Show-PolicyNote
+
 Write-Host '  To show the pairing code again later:' -ForegroundColor White
-Write-Dim "  cd `"$InstallDir`"; npm run pair"
+Write-Dim "  cd `"$InstallDir`"; node pair.js"
 Write-Host ''
 
 if (-not $NoPair) {
