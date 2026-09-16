@@ -578,7 +578,13 @@ $nodePath = Resolve-Node
 
 # An existing install and no flags means the user typed the one-line command
 # again on purpose. Ask what they want rather than assuming.
-$alreadyInstalled = Test-Path (Join-Path $InstallDir 'package.json')
+#
+# node_modules, not package.json: the files are copied into place before npm
+# runs, so a run that died during npm leaves a folder that looks installed but
+# cannot start. Offering that person a menu is the wrong answer -- they just
+# want the install to finish, so fall through and finish it.
+$alreadyInstalled = (Test-Path (Join-Path $InstallDir 'package.json')) -and
+                    (Test-Path (Join-Path $InstallDir 'node_modules'))
 $repairing = $false
 if ($alreadyInstalled -and -not $Firmware -and -not $NoAutoStart -and
     -not $NoPair -and [Environment]::UserInteractive) {
