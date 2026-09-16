@@ -2,7 +2,7 @@
   "expo": {
     "name": "Reveille",
     "slug": "reveille",
-    "version": "1.0.13",
+    "version": "1.0.14",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "reveille",
@@ -25,7 +25,7 @@
     },
     "android": {
       "package": "com.shami.pcremote",
-      "versionCode": 10013,
+      "versionCode": 10014,
       "adaptiveIcon": {
         "backgroundColor": "#111926",
         "foregroundImage": "./assets/android-icon-foreground.png",

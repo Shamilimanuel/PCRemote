@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Device } from '../types/device';
 import { useDeviceStatus } from '../hooks/useDeviceStatus';
 import { useTheme } from '../theme/ThemeContext';
+import { DeviceKindIcon } from '../components/DeviceKind';
 import { RADIUS, raised, sunken, filled } from '../theme/clay';
 import UpdateBanner from '../components/UpdateBanner';
 import { GearIcon } from '../components/icons';
@@ -82,6 +83,9 @@ function DeviceCard({ device, onPress }: { device: Device; onPress: () => void }
       onPressOut={() => setDown(false)}
       onPress={onPress}
     >
+      <View style={[styles.cardIcon, sunken(theme, 0.5)]}>
+        <DeviceKindIcon kind={device.kind} size={19} color={theme.ink2} strokeWidth={1.9} />
+      </View>
       <View style={styles.cardText}>
         <Text style={[styles.cardName, { color: theme.ink }]} numberOfLines={1}>
           {device.name}
@@ -154,6 +158,14 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   cardDown: { transform: [{ scale: 0.98 }] },
+  cardIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
   cardText: { flex: 1, minWidth: 0 },
   cardName: { fontSize: 19, fontWeight: '800', letterSpacing: -0.2 },
   cardAddress: { fontSize: 12.5, fontWeight: '700', marginTop: 3 },

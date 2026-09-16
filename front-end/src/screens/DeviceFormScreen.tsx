@@ -1,12 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Device } from '../types/device';
+import { Device, DeviceKind } from '../types/device';
 import { checkHealth } from '../lib/api';
 import { useTheme } from '../theme/ThemeContext';
 import { RADIUS, sunken } from '../theme/clay';
 import { ClayButton } from '../components/Clay';
 import { HelpIcon } from '../components/icons';
+import { DeviceKindPicker } from '../components/DeviceKind';
 import HelpSheet from '../components/HelpSheet';
 import { useDialog } from '../components/Dialog';
 import { explain } from '../lib/errors';
@@ -42,6 +43,7 @@ export default function DeviceFormScreen({
   const [port, setPort] = useState(initial ? String(initial.port) : '5533');
   const [token, setToken] = useState(initial?.token ?? '');
   const [mac, setMac] = useState(initial?.mac ?? '');
+  const [kind, setKind] = useState<DeviceKind>(initial?.kind ?? 'desktop');
   const [remoteHost, setRemoteHost] = useState(initial?.remoteHost ?? '');
   const [testing, setTesting] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -57,6 +59,7 @@ export default function DeviceFormScreen({
     setPort(String(initial.port));
     setToken(initial.token);
     setMac(initial.mac);
+    setKind(initial.kind ?? 'desktop');
     setRemoteHost(initial.remoteHost ?? '');
   }, [initial]);
 
@@ -70,6 +73,7 @@ export default function DeviceFormScreen({
       port: Number(port.trim()) || 5533,
       token: token.trim(),
       mac: mac.trim(),
+      kind,
       remoteHost: remoteHost.trim() || undefined,
     };
   }
@@ -139,6 +143,7 @@ export default function DeviceFormScreen({
         )}
 
         <Field label={t.name} value={name} onChangeText={setName} placeholder={t.namePlaceholder} />
+        <DeviceKindPicker value={kind} onChange={setKind} />
         <Field
           label={t.ipAddress}
           value={ip}

@@ -1,5 +1,6 @@
 const os = require('os');
 const { exec } = require('child_process');
+const { PLATFORM } = require('./platform');
 
 /**
  * What the PC is currently doing, so the app can answer "is that render
@@ -45,7 +46,7 @@ function systemDrive() {
   return (process.env.SystemDrive || 'C:').replace(/\\$/, '');
 }
 
-function readDisk() {
+function readWindowsDisk() {
   return new Promise((resolve) => {
     const drive = systemDrive();
     const command =
@@ -72,6 +73,50 @@ function readDisk() {
       }
     });
   });
+}
+
+/**
+ * macOS and Linux both ship `df`, and `-P` pins the output to the POSIX layout
+ * so a long device name cannot wrap onto a second line and shift the columns:
+ *
+ *   Filesystem 1024-blocks      Used Available Capacity Mounted on
+ *   /dev/disk3s5   971350180 383201448 552829176      41% /
+ *
+ * `-k` fixes the block size at 1024 bytes, so the numbers mean the same thing
+ * on both -- macOS otherwise reports 512-byte blocks.
+ */
+function readUnixDisk() {
+  return new Promise((resolve) => {
+    exec('df -Pk /', { timeout: 4000 }, (error, stdout) => {
+      if (error || !stdout.trim()) {
+        resolve(null);
+        return;
+      }
+      const row = stdout.trim().split('\n')[1];
+      if (!row) {
+        resolve(null);
+        return;
+      }
+      const columns = row.trim().split(/\s+/);
+      const totalBlocks = Number(columns[1]);
+      const freeBlocks = Number(columns[3]);
+      if (!Number.isFinite(totalBlocks) || !Number.isFinite(freeBlocks)) {
+        resolve(null);
+        return;
+      }
+      resolve({
+        drive: columns[5] || '/',
+        totalBytes: totalBlocks * 1024,
+        freeBytes: freeBlocks * 1024,
+      });
+    });
+  });
+}
+
+function readDisk() {
+  if (PLATFORM === 'windows') return readWindowsDisk();
+  if (PLATFORM === 'macos' || PLATFORM === 'linux') return readUnixDisk();
+  return Promise.resolve(null);
 }
 
 async function disk() {

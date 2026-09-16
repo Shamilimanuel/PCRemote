@@ -1,8 +1,8 @@
 # Reveille
 
 Named for the bugle call that wakes a barracks at dawn — a remote control for your
-PC. A mobile app that can **start, shut down, restart, sleep, and lock** your Windows
-PC over your home Wi-Fi.
+computer. A mobile app that can **start, shut down, restart, sleep, and lock** your
+**Windows, macOS or Linux** machine over your home Wi-Fi.
 
 ## How it works
 
@@ -19,13 +19,21 @@ agent, so nothing but a magic packet from the same network segment can wake it, 
 your router specifically supports forwarding WOL packets from the internet (not covered
 here).
 
-## 1. Set up the PC agent
+## 1. Set up the agent
 
-Paste this into PowerShell on the PC you want to control:
+On **Windows**, paste this into PowerShell on the machine you want to control:
 
 ```powershell
 irm github.com/Shamilimanuel/PCRemote/raw/main/setup.ps1 | iex
 ```
+
+On **macOS or Linux**, paste this into a terminal instead:
+
+```bash
+curl -fsSL github.com/Shamilimanuel/PCRemote/raw/main/setup.sh | bash
+```
+
+Both do the same thing and offer the same menu on a second run.
 
 That installs Node.js if it's missing, puts the agent in `%LOCALAPPDATA%\Reveille`,
 sets it to start when you log in, checks it answers, and opens the pairing code for the
@@ -52,6 +60,36 @@ $s = 'github.com/Shamilimanuel/PCRemote/raw/main/setup.ps1'
 & ([scriptblock]::Create((irm $s))) -NoFirmware    # skip the question
 & ([scriptblock]::Create((irm $s))) -NoAutoStart   # don't start at login
 ```
+
+### What works on which system
+
+Everything runs the same agent and answers the same commands. Two things differ,
+and the app hides the buttons rather than letting you press something that cannot
+work — the agent reports what it can do, and has since before there was more than
+one platform to report.
+
+| | Windows | macOS | Linux |
+|---|---|---|---|
+| Wake (Wake-on-LAN) | ✅ | ✅ | ✅ |
+| Shut down / restart / sleep / lock | ✅ | ✅ | ✅ |
+| Timed shutdown | ✅ | ✅ | ✅ |
+| CPU / memory / disk | ✅ | ✅ | ✅ |
+| Update notifications | ✅ | ✅ | ✅ |
+| Reboot to BIOS | ✅ | — | — |
+| Answering at the lock screen | ✅ | — | — |
+
+**Reboot to BIOS** is Windows-only because it is the only one of the three where an
+elevated task can be registered once and then triggered by something holding no
+privileges of its own. Macs have no firmware screen to reach.
+
+**Timed shutdown** works differently underneath. Windows schedules it itself
+(`shutdown /t`), so it survives the agent being killed. macOS and Linux have no
+equivalent that works without root, so the agent holds the countdown — which means
+it is called off if the agent stops. The app behaves the same either way.
+
+**None of it needs root or administrator**, on any of the three. macOS goes through
+System Events and Linux through systemd's user session, both of which a logged-in
+user is allowed to do.
 
 ### Making the install line shorter
 
