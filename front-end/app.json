@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "PC Remote",
-    "slug": "pc-remote",
+    "name": "Reveille",
+    "slug": "reveille",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "scheme": "pcremote",
+    "scheme": "reveille",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#0F1115",
     "ios": {
@@ -16,9 +16,9 @@
         "NSAppTransportSecurity": {
           "NSAllowsLocalNetworking": true
         },
-        "NSLocalNetworkUsageDescription": "PC Remote needs local network access to reach the agent on your PC and to broadcast the Wake-on-LAN packet that powers it on.",
+        "NSLocalNetworkUsageDescription": "Reveille needs local network access to reach the agent on your PC and to broadcast the Wake-on-LAN packet that powers it on.",
         "NSBonjourServices": [
-          "_pcremote._tcp"
+          "_reveille._tcp"
         ]
       }
     },

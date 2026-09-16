@@ -1,6 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Device } from '../types/device';
 
+// Predates the rename to Reveille. Changing it would orphan every PC
+// already saved on the phone, so it stays as it is.
 const DEVICES_KEY = 'pc-remote:devices';
 
 export async function getDevices(): Promise<Device[]> {

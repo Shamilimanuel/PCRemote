@@ -15,7 +15,7 @@ export default function DeviceListScreen({ devices, onSelect, onAdd }: Props) {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <View style={styles.header}>
-        <Text style={styles.title}>PC Remote</Text>
+        <Text style={styles.title}>Reveille</Text>
         <Pressable style={styles.addButton} onPress={onAdd}>
           <Text style={styles.addButtonText}>+ Add PC</Text>
         </Pressable>

@@ -1,7 +1,8 @@
-# PC Remote
+# Reveille
 
-A Wolow-style remote control for your PC: a mobile app that can **start, shut down,
-restart, sleep, and lock** your Windows PC over your home Wi-Fi.
+Named for the bugle call that wakes a barracks at dawn — a remote control for your
+PC. A mobile app that can **start, shut down, restart, sleep, and lock** your Windows
+PC over your home Wi-Fi.
 
 ## How it works
 
@@ -32,7 +33,7 @@ On first run it generates a random auth token and prints everything you need:
 
 ```
 =========================================
- PC Remote agent is running
+ Reveille agent is running
 =========================================
   Device name : YOUR-PC
   Port        : 5533
@@ -176,7 +177,7 @@ so the actions that need the agent are dimmed and only **Start** is expected to 
 ## Project layout
 
 ```
-PCRemote/
+Reveille/
 ├── back-end/     Node.js LAN agent that runs on the PC
 │   ├── src/
 │   │   ├── index.js      entry point, prints pairing info
