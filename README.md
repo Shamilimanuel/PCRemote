@@ -113,6 +113,40 @@ The app hides the button unless the agent reports the task is installed, and the
 panel says which it is -- an absent button is otherwise indistinguishable from a broken
 one.
 
+### Answering at the lock screen
+
+Optional. The installer asks; `install-presence-task.ps1` does the same thing on its own.
+
+Windows starts the agent when you **log in**. So a PC woken from a full shutdown boots,
+reaches its lock screen, and sits there looking offline in the app until somebody walks
+over and types a PIN — which is the one moment you were least likely to be standing next
+to it. Pressing **Wake** appeared to do nothing for the better part of a minute.
+
+There is no way to fix that at ordinary privilege: Windows does not let a non-administrator
+register anything to start before log on, at all. `install-presence-task.ps1` asks for
+administrator once and registers a boot-triggered task for
+[`src/presence.js`](back-end/src/presence.js) — about eighty lines that listen on the
+agent's port **+ 1** and answer one question, "is this PC on?", to anyone holding the
+token.
+
+What it does *not* contain is any way to shut down, restart, sleep or lock the machine.
+That is deliberate. It is the thing left running while the PC sits unattended at a lock
+screen, so it holds as little as it can. Administrator is needed to **create** the task,
+not by the task itself: it is registered with an S4U logon, meaning it runs as you, with
+your ordinary privileges, no stored password and no interactive desktop.
+
+The installer also adds a firewall rule for that port, scoped to private and domain
+networks — the agent gets its rule from Node's own prompt on first listen, which nothing
+is logged in to answer at boot.
+
+In the app a PC in this state reads **Lock screen** in amber rather than **Awake** in
+green, and the controls stay dimmed, because none of them will work yet. Wake counts it
+as a success and stops counting. Without this installed nothing changes: that stretch
+still reads as offline, exactly as before.
+
+The browser version can't show this state at all, and shouldn't — it is served *by* the
+agent, so if you can load the page, the agent is already running.
+
 ## 2. Build the phone app
 
 The app uses three native modules — `react-native-udp` (Wake-on-LAN needs a real UDP
@@ -303,11 +337,13 @@ Reveille/
 │   │   ├── index.js      entry point, prints pairing info
 │   │   ├── server.js     Express routes + auth
 │   │   ├── commands.js   shutdown/restart/sleep/lock command mapping
-│   │   └── config.js     token + network info
+│   │   ├── config.js     token + network info
+│   │   └── presence.js   boot-time "is this PC on?" responder
 │   ├── web/              the browser version of the app
 │   ├── pair.js           opens the pairing code in a browser
 │   ├── install-agent-task.ps1
 │   ├── install-firmware-task.ps1
+│   ├── install-presence-task.ps1
 │   └── uninstall-agent-task.ps1
 ├── .github/workflows/
 │   └── android.yml   builds + signs the APK, publishes it to Releases

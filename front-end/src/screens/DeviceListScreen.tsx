@@ -90,12 +90,38 @@ function DeviceCard({ device, onPress }: { device: Device; onPress: () => void }
       </View>
       <View style={[styles.pill, sunken(theme, 0.6)]}>
         <View
-          style={[styles.dot, { backgroundColor: status === 'online' ? theme.moss : theme.ink3 }]}
+          style={[
+            styles.dot,
+            {
+              backgroundColor:
+                status === 'online'
+                  ? theme.moss
+                  : status === 'locked'
+                    ? theme.waking
+                    : theme.ink3,
+            },
+          ]}
         />
         <Text
-          style={[styles.pillText, { color: status === 'online' ? theme.moss : theme.ink3 }]}
+          style={[
+            styles.pillText,
+            {
+              color:
+                status === 'online'
+                  ? theme.moss
+                  : status === 'locked'
+                    ? theme.waking
+                    : theme.ink3,
+            },
+          ]}
         >
-          {status === 'online' ? t.awake : status === 'offline' ? t.asleep : t.checking}
+          {status === 'online'
+            ? t.awake
+            : status === 'locked'
+              ? t.atLockScreen
+              : status === 'offline'
+                ? t.asleep
+                : t.checking}
         </Text>
       </View>
     </Pressable>

@@ -23,16 +23,20 @@ const SURFACE = '#232836';
 const TEXT = '#FFFFFF';
 const MUTED = '#8A8F9C';
 const GREEN = '#5FD68C';
+// On, but not logged in: the buttons on the widget will not do anything yet.
+const AMBER = '#E0B15F';
 const FAINT = '#5A5F6B';
 
 const STATUS_COLOUR: Record<DeviceStatus, `#${string}`> = {
   online: GREEN,
+  locked: AMBER,
   offline: FAINT,
   unknown: MUTED,
 };
 
 const STATUS_LABEL: Record<DeviceStatus, string> = {
   online: 'Online',
+  locked: 'Lock screen',
   offline: 'Offline',
   unknown: 'Checking',
 };

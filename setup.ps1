@@ -34,7 +34,11 @@ param(
     # Install without registering it to start at login.
     [switch]$NoAutoStart,
     # Skip the reboot-to-BIOS question entirely. For scripted installs.
-    [switch]$NoFirmware
+    [switch]$NoFirmware,
+    # Answer the lock-screen question yes without being asked about it.
+    [switch]$LockScreen,
+    # Skip the lock-screen question entirely. For scripted installs.
+    [switch]$NoLockScreen
 )
 
 $ErrorActionPreference = 'Stop'
@@ -44,6 +48,7 @@ $Branch     = 'main'
 $TaskName   = 'ReveilleAgent'
 $LegacyTask = 'PCRemoteAgent'
 $FirmwareTask = 'ReveilleFirmwareReboot'
+$PresenceTask = 'ReveillePresence'
 $InstallDir = if ($Path) { $Path } else { Join-Path $env:LOCALAPPDATA 'Reveille' }
 
 function Write-Step  { param([string]$m) Write-Host "  $m" -ForegroundColor Cyan }
@@ -119,6 +124,18 @@ function Invoke-Uninstall {
             Write-Dim "removed scheduled task '$FirmwareTask'"
         } catch {
             Write-Warn2 "'$FirmwareTask' needs an administrator PowerShell to remove. Skipped."
+        }
+    }
+
+    if (Get-ScheduledTask -TaskName $PresenceTask -ErrorAction SilentlyContinue) {
+        try {
+            Stop-ScheduledTask -TaskName $PresenceTask -ErrorAction SilentlyContinue
+            Unregister-ScheduledTask -TaskName $PresenceTask -Confirm:$false -ErrorAction Stop
+            Get-NetFirewallRule -DisplayName 'Reveille lock-screen responder' -ErrorAction SilentlyContinue |
+                Remove-NetFirewallRule -ErrorAction SilentlyContinue
+            Write-Dim "removed scheduled task '$PresenceTask'"
+        } catch {
+            Write-Warn2 "'$PresenceTask' needs an administrator PowerShell to remove. Skipped."
         }
     }
 
@@ -332,6 +349,75 @@ function Confirm-Firmware {
     return $answer -match '^\s*(y|yes|j|ja)\s*$'
 }
 
+# --------------------------------------------------- lock-screen responder --
+
+function Install-PresenceTask {
+    param([string]$Destination)
+
+    $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $isAdmin = (New-Object Security.Principal.WindowsPrincipal($identity)).IsInRole(
+        [Security.Principal.WindowsBuiltInRole]::Administrator)
+
+    $script = Join-Path $Destination 'install-presence-task.ps1'
+    if ($isAdmin) {
+        & powershell -ExecutionPolicy Bypass -File $script
+        return
+    }
+
+    Write-Step 'Answering at the lock screen needs administrator approval once...'
+    $p = Start-Process powershell -Verb RunAs -Wait -PassThru `
+        -ArgumentList '-ExecutionPolicy', 'Bypass', '-File', "`"$script`""
+    if ($p.ExitCode -eq 0) {
+        Write-Ok 'This PC will show as awake at the lock screen.'
+    } else {
+        Write-Warn2 'Not set up. The PC will show as awake once you log in, as before.'
+    }
+}
+
+<#
+    Asks whether the PC should answer the phone while it sits at the lock
+    screen.
+
+    Worth asking rather than assuming, for the same reason as the BIOS
+    question: it needs administrator once. Windows does not let an ordinary
+    user register anything to start before log on, at all -- so the agent's own
+    task is triggered by logging in, and a PC woken from a full shutdown looks
+    offline until someone types their PIN.
+#>
+function Confirm-Presence {
+    if (Get-ScheduledTask -TaskName $PresenceTask -ErrorAction SilentlyContinue) {
+        Write-Dim 'Answering at the lock screen is already set up.'
+        return $false
+    }
+    # Read-Host needs a console. A piped or scheduled run gets a quiet no.
+    if (-not [Environment]::UserInteractive) { return $false }
+
+    Write-Host ''
+    Write-Host '  ------------------------------------------------' -ForegroundColor DarkGray
+    Write-Host '  Optional: show this PC as awake at the lock screen?' -ForegroundColor White
+    Write-Host ''
+    Write-Dim '  Right now, waking this PC from off leaves the app'
+    Write-Dim '  showing it as offline until someone types their PIN,'
+    Write-Dim '  because the agent starts when you log in.'
+    Write-Host ''
+    Write-Dim '  Saying yes:'
+    Write-Dim '   - asks Windows for administrator once, right now'
+    Write-Dim '   - starts one small program at boot that answers'
+    Write-Dim '     one question: is this PC on?'
+    Write-Host ''
+    Write-Dim '  That program runs as you, unprivileged, and has no'
+    Write-Dim '  shutdown, restart, sleep or lock code in it. Only'
+    Write-Dim '  creating it needs administrator, not running it.'
+    Write-Host ''
+    Write-Dim '  Saying no changes nothing, and you can add it later'
+    Write-Dim '  by running this again.'
+    Write-Host '  ------------------------------------------------' -ForegroundColor DarkGray
+    Write-Host ''
+
+    $answer = Read-Host '  Answer at the lock screen? (y/N)'
+    return $answer -match '^\s*(y|yes|j|ja)\s*$'
+}
+
 # -------------------------------------------------------------------- verify --
 
 # An older install -- or a copy started by hand -- will still be holding the
@@ -433,6 +519,16 @@ if ($Firmware) {
 } elseif (-not $NoFirmware) {
     if (Confirm-Firmware) {
         Install-FirmwareTask -Destination $InstallDir
+    } else {
+        Write-Dim 'Skipped. Run this again any time to add it.'
+    }
+}
+
+if ($LockScreen) {
+    Install-PresenceTask -Destination $InstallDir
+} elseif (-not $NoLockScreen) {
+    if (Confirm-Presence) {
+        Install-PresenceTask -Destination $InstallDir
     } else {
         Write-Dim 'Skipped. Run this again any time to add it.'
     }

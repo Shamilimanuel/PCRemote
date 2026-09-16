@@ -161,7 +161,11 @@ export default function ControlScreen({ device, onBack, onEdit, onSettings }: Pr
     setTimerFor(key);
   }
 
-  const offline = status === 'offline';
+  // 'locked' counts as offline for anything that presses a button: the PC is
+  // on, but the agent only starts at log on, so there is nothing to press yet.
+  // 'unknown' is left alone deliberately -- the first poll has not come back,
+  // and dimming the whole screen before it does reads as a fault.
+  const offline = status === 'offline' || status === 'locked';
   const resultFor = (key: ActionKey) =>
     result && result.key === key ? (result.ok ? 'ok' : 'bad') : null;
 
@@ -196,16 +200,36 @@ export default function ControlScreen({ device, onBack, onEdit, onSettings }: Pr
               <View
                 style={[
                   styles.dot,
-                  { backgroundColor: status === 'online' ? theme.moss : theme.ink3 },
+                  {
+                    backgroundColor:
+                      status === 'online'
+                        ? theme.moss
+                        : status === 'locked'
+                          ? theme.waking
+                          : theme.ink3,
+                  },
                 ]}
               />
               <Text
                 style={[
                   styles.pillText,
-                  { color: status === 'online' ? theme.moss : theme.ink3 },
+                  {
+                    color:
+                      status === 'online'
+                        ? theme.moss
+                        : status === 'locked'
+                          ? theme.waking
+                          : theme.ink3,
+                  },
                 ]}
               >
-                {status === 'online' ? t.awake : status === 'offline' ? t.asleep : t.checking}
+                {status === 'online'
+                  ? t.awake
+                  : status === 'locked'
+                    ? t.atLockScreen
+                    : status === 'offline'
+                      ? t.asleep
+                      : t.checking}
               </Text>
             </View>
           </Pressable>
@@ -227,7 +251,7 @@ export default function ControlScreen({ device, onBack, onEdit, onSettings }: Pr
               accent
               voice={VOICE.start}
               busy={busy === 'start'}
-              dimmed={status === 'online'}
+              dimmed={status === 'online' || status === 'locked'}
               result={resultFor('start')}
               onPress={() => press('start')}
             />
@@ -328,7 +352,11 @@ export default function ControlScreen({ device, onBack, onEdit, onSettings }: Pr
         <NetworkInfo device={device} health={health} latencyMs={latencyMs} status={status} route={route} />
 
         <Text style={[styles.footnote, { color: theme.ink3 }]}>
-          {offline ? t.offlineFootnote : t.onlineFootnote}
+          {status === 'locked'
+            ? t.lockedFootnote
+            : offline
+              ? t.offlineFootnote
+              : t.onlineFootnote}
         </Text>
       </ScrollView>
 
