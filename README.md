@@ -240,10 +240,19 @@ that could receive a forwarded packet, so **Start** only works on the same netwo
 The app checks this repo's latest release on launch and shows a banner when there's a
 newer build. It needs no sign-in because the repo is public.
 
-The check works by comparing Android's `versionCode` against the release tag. The
-workflow sets `versionCode = 100 + <run number>` and tags the release `v1.0.<run number>`,
-so the two stay in lockstep — see `VERSION_CODE_BASE` in `src/lib/updates.ts` if that
-scheme ever changes.
+### Versioning
+
+`expo.version` in `front-end/app.json` is the single source of truth, and it is set by
+hand. Bump it, push, and the build tags the release to match.
+
+The workflow derives Android's `versionCode` from it — `major * 10000 + minor * 100 +
+patch`, so `1.0.9` becomes `10009`. That number is what Android compares to decide
+whether an APK counts as an update; it must never go backwards. The app compares version
+names to spot a newer release, which is why both come from the same place.
+
+Versions used to be derived from the CI run number instead. That meant a cancelled build
+burned a version, and releases were named by however many times CI happened to run
+rather than by intent.
 
 Installing a new build **over** the old one keeps every saved PC. Only uninstalling
 loses them.

@@ -37,27 +37,25 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Set the version from the run number
-        # Android tracks two numbers and they do different jobs:
-        #
-        #   versionCode  an integer it compares to decide whether an APK is
-        #                an update. Never shown to anyone.
-        #   version      the name it shows in app info and in the app.
-        #
-        # Only the first was being set, so every build installed correctly
-        # and then reported itself as 1.0.0 -- indistinguishable from an
-        # update that never happened.
+      - name: Derive the version code
+        # The version in app.json is the source of truth and is set by hand,
+        # so releases are named deliberately rather than by however many
+        # times CI happened to run. versionCode -- the integer Android
+        # compares to decide whether an APK is an update -- is derived from
+        # it, so the two can never drift apart.
         run: |
           node -e "
             const fs = require('fs');
             const cfg = JSON.parse(fs.readFileSync('app.json', 'utf8'));
-            const run = Number(process.env.GITHUB_RUN_NUMBER);
-            const code = 100 + run;
-            cfg.expo.version = '1.0.' + run;
+            const v = String(cfg.expo.version);
+            const m = /^(\d+)\.(\d+)\.(\d+)$/.exec(v);
+            if (!m) { console.error('app.json version must be x.y.z, got ' + v); process.exit(1); }
+            const code = Number(m[1]) * 10000 + Number(m[2]) * 100 + Number(m[3]);
             cfg.expo.android.versionCode = code;
             cfg.expo.ios.buildNumber = String(code);
             fs.writeFileSync('app.json', JSON.stringify(cfg, null, 2) + '\n');
-            console.log('version = ' + cfg.expo.version + '  versionCode = ' + code);
+            fs.appendFileSync(process.env.GITHUB_ENV, 'APP_VERSION=' + v + '\n');
+            console.log('version ' + v + '  versionCode ' + code);
           "
 
       - name: Generate the native Android project
@@ -120,7 +118,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="v1.0.${GITHUB_RUN_NUMBER}"
+          TAG="v${APP_VERSION}"
           APK=front-end/dist/reveille.apk
           SIZE=$(( $(stat -c%s "$APK") / 1048576 ))
           SUM=$(sha256sum "$APK" | cut -d' ' -f1)
