@@ -5,6 +5,11 @@ export type Device = {
   port: number;
   token: string;
   mac: string;
+  /**
+   * Optional second address for reaching the agent from outside the house —
+   * a Tailscale address, say. Tried only after the LAN address fails.
+   */
+  remoteHost?: string;
 };
 
 export type PendingAction = 'shutdown' | 'restart' | 'sleep' | 'lock' | null;
@@ -33,3 +38,6 @@ export type HealthResponse = {
  * unreachable alike.
  */
 export type DeviceStatus = 'unknown' | 'online' | 'offline';
+
+/** Which address answered — shown so you can tell home from away. */
+export type Route = 'local' | 'remote';

@@ -30,6 +30,7 @@ export default function DeviceFormScreen({ initial, onSave, onCancel, onDelete }
   const [port, setPort] = useState(initial ? String(initial.port) : '5533');
   const [token, setToken] = useState(initial?.token ?? '');
   const [mac, setMac] = useState(initial?.mac ?? '');
+  const [remoteHost, setRemoteHost] = useState(initial?.remoteHost ?? '');
   const [testing, setTesting] = useState(false);
 
   const canSave = name.trim() && ip.trim() && port.trim() && token.trim() && mac.trim();
@@ -42,6 +43,7 @@ export default function DeviceFormScreen({ initial, onSave, onCancel, onDelete }
       port: Number(port.trim()) || 5533,
       token: token.trim(),
       mac: mac.trim(),
+      remoteHost: remoteHost.trim() || undefined,
     };
   }
 
@@ -88,6 +90,17 @@ export default function DeviceFormScreen({ initial, onSave, onCancel, onDelete }
           placeholder="AA:BB:CC:DD:EE:FF"
           autoCapitalize="characters"
         />
+
+        <Field
+          label="Remote address (optional)"
+          value={remoteHost}
+          onChangeText={setRemoteHost}
+          placeholder="e.g. desktop-divine.tail1234.ts.net"
+        />
+        <Text style={styles.fieldHint}>
+          Used only when the address above can't be reached — lets shutdown, sleep and lock work
+          when you're away from home. Leave empty if you only use this on your own Wi-Fi.
+        </Text>
 
         <Pressable
           style={[styles.button, styles.testButton, (!canSave || testing) && styles.buttonDisabled]}
@@ -149,6 +162,7 @@ const styles = StyleSheet.create({
   scroll: { padding: 20, gap: 4 },
   title: { fontSize: 24, fontWeight: '700', color: '#FFFFFF', marginBottom: 6 },
   hint: { color: '#8A8F9C', marginBottom: 20, lineHeight: 20 },
+  fieldHint: { color: '#5A5F6B', fontSize: 12, lineHeight: 17, marginTop: -6, marginBottom: 4 },
   field: { marginBottom: 14 },
   label: { color: '#8A8F9C', marginBottom: 6, fontSize: 13 },
   input: {

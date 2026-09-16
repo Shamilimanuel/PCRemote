@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Device } from '../types/device';
 import { useDeviceStatus } from '../hooks/useDeviceStatus';
 import StatusPill from '../components/StatusPill';
+import UpdateBanner from '../components/UpdateBanner';
 
 type Props = {
   devices: Device[];
@@ -20,6 +21,8 @@ export default function DeviceListScreen({ devices, onSelect, onAdd }: Props) {
           <Text style={styles.addButtonText}>+ Add PC</Text>
         </Pressable>
       </View>
+
+      <UpdateBanner />
 
       {devices.length === 0 ? (
         <View style={styles.empty}>
