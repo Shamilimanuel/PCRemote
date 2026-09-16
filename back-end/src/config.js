@@ -12,7 +12,9 @@ function generateToken() {
 
 function loadOrCreateConfig() {
   if (fs.existsSync(CONFIG_PATH)) {
-    const raw = fs.readFileSync(CONFIG_PATH, 'utf8');
+    // Strip a byte-order mark: Notepad and PowerShell's Set-Content both add
+    // one, and JSON.parse treats it as a syntax error rather than ignoring it.
+    const raw = fs.readFileSync(CONFIG_PATH, 'utf8').replace(/^\uFEFF/, '');
     const config = JSON.parse(raw);
     if (!config.token) {
       config.token = generateToken();
