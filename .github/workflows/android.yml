@@ -86,19 +86,19 @@ jobs:
             --ks-pass "pass:$KEYSTORE_PASSWORD" \
             --ks-key-alias "$KEY_ALIAS" \
             --key-pass "pass:$KEY_PASSWORD" \
-            --out dist/pc-remote.apk \
+            --out dist/reveille.apk \
             "$UNSIGNED"
 
           # Fail loudly rather than shipping something the phone will reject.
-          "$APKSIGNER" verify --print-certs dist/pc-remote.apk
+          "$APKSIGNER" verify --print-certs dist/reveille.apk
 
           rm -f "$RUNNER_TEMP/release.jks"
 
       - name: Upload APK as a workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: pc-remote-apk
-          path: front-end/dist/pc-remote.apk
+          name: reveille-apk
+          path: front-end/dist/reveille.apk
           retention-days: 90
 
       - name: Publish a release
@@ -106,9 +106,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="v1.0.${GITHUB_RUN_NUMBER}"
-          gh release create "$TAG" front-end/dist/pc-remote.apk \
+          gh release create "$TAG" front-end/dist/reveille.apk \
             --repo "$GITHUB_REPOSITORY" \
-            --title "PC Remote $TAG" \
-            --notes "Android APK built from \`${GITHUB_SHA::7}\`. Download **pc-remote.apk** below and open it on your phone to install." \
+            --title "Reveille $TAG" \
+            --notes "Android APK built from \`${GITHUB_SHA::7}\`. Download **reveille.apk** below and open it on your phone to install." \
             --latest
         working-directory: .

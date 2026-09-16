@@ -12,7 +12,7 @@ app.listen(config.port, '0.0.0.0', () => {
 
   console.log('');
   console.log('=========================================');
-  console.log(' PC Remote agent is running');
+  console.log(' Reveille agent is running');
   console.log('=========================================');
   console.log(`  Device name : ${hostname}`);
   console.log(`  Port        : ${config.port}`);

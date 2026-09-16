@@ -1,4 +1,4 @@
-# Registers a Scheduled Task that starts the PC Remote agent automatically
+# Registers a Scheduled Task that starts the Reveille agent automatically
 # whenever you log in (including after the PC wakes from a Wake-on-LAN start).
 #
 # Run this once:
@@ -10,7 +10,16 @@
 
 $ErrorActionPreference = 'Stop'
 
-$taskName = 'PCRemoteAgent'
+$taskName = 'ReveilleAgent'
+$legacyTaskName = 'PCRemoteAgent'   # what the task was called before the rename
+
+# Clear out the pre-rename task so the agent isn't started twice at login.
+$legacy = Get-ScheduledTask -TaskName $legacyTaskName -ErrorAction SilentlyContinue
+if ($legacy) {
+    Write-Host "Removing the old '$legacyTaskName' task."
+    Stop-ScheduledTask -TaskName $legacyTaskName -ErrorAction SilentlyContinue
+    Unregister-ScheduledTask -TaskName $legacyTaskName -Confirm:$false
+}
 
 $nodeCmd = Get-Command node -ErrorAction SilentlyContinue
 if (-not $nodeCmd) {

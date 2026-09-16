@@ -1,4 +1,4 @@
-' Launches the PC Remote agent with no console window.
+' Launches the Reveille agent with no console window.
 '
 ' Node has no windowless executable of its own, so running it straight from a
 ' Scheduled Task pops a black console window at every login. This shim starts
