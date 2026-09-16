@@ -1,0 +1,22 @@
+* text=auto
+
+# Shell scripts must keep LF, always. A carriage return at the end of the
+# shebang makes the kernel look for an interpreter literally called "bash\r",
+# and the error it produces ("bad interpreter: no such file or directory")
+# points at nothing resembling the cause. This repository is worked on from
+# Windows, where core.autocrlf would otherwise hand macOS and Linux a file
+# that cannot run.
+*.sh text eol=lf
+
+# PowerShell 5.1 reads a .ps1 without a BOM as ANSI rather than UTF-8, which is
+# why setup.ps1 is kept to pure ASCII. CRLF is what Windows tooling expects.
+*.ps1 text eol=crlf
+
+# Binary, so never touched.
+*.png binary
+*.jpg binary
+*.apk binary
+*.jks binary
+*.ttf binary
+*.wav binary
+*.mp3 binary
