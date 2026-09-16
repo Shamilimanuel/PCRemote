@@ -301,3 +301,23 @@ Reveille/
         ├── lib/          api.ts (HTTP calls), wol.ts (magic packet), storage.ts
         └── types/
 ```
+
+## Licence
+
+MIT — see [LICENSE](LICENSE). Use it, change it, ship it; just keep the
+copyright line.
+
+## Using this on your own PC
+
+Everything here works for anyone, not just the machine it was built on:
+
+```powershell
+irm https://raw.githubusercontent.com/Shamilimanuel/PCRemote/main/setup.ps1 | iex
+```
+
+The agent generates its own token on first run, so each install is independent.
+The app is on the [releases page](https://github.com/Shamilimanuel/PCRemote/releases/latest).
+
+Two honest limits before you start: the PC side is **Windows only** (it calls
+`shutdown` and `rundll32` directly), and the app is **Android only** — an iOS
+build needs a paid Apple developer account to install on a real device.
