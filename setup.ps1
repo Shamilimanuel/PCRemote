@@ -51,11 +51,51 @@ function Write-Ok    { param([string]$m) Write-Host "  $m" -ForegroundColor Gree
 function Write-Warn2 { param([string]$m) Write-Host "  $m" -ForegroundColor Yellow }
 function Write-Dim   { param([string]$m) Write-Host "  $m" -ForegroundColor DarkGray }
 
+<#
+    The banner.
+
+    Drawn from a bitmap rather than pasted as literal block characters, so this
+    file stays plain ASCII -- PowerShell 5.1 reads a .ps1 as ANSI unless it has
+    a byte-order mark, and pasted block art turns to mojibake. Built from
+    [char] codes it renders correctly however the script is fetched or run.
+
+    The R is the logo's colour; the rest of the word sits behind it.
+#>
+
+$script:Glyphs = @{
+    'R' = @('####.', '#...#', '####.', '#..#.', '#...#')
+    'E' = @('#####', '#....', '####.', '#....', '#####')
+    'V' = @('#...#', '#...#', '#...#', '.#.#.', '..#..')
+    'I' = @('#####', '..#..', '..#..', '..#..', '#####')
+    'L' = @('#....', '#....', '#....', '#....', '#####')
+}
+
 function Write-Banner {
+    $block = [string][char]0x2588      # full block
+    $rule = [string][char]0x2500       # horizontal rule
+    $word = 'REVEILLE'
+
+    # Cyan at the top falling to blue at the bottom -- the same gradient the
+    # beam has in the app icon. The R keeps the bright end on every row so the
+    # monogram still reads as the mark.
+    $gradient = @('Cyan', 'Cyan', 'DarkCyan', 'DarkCyan', 'Blue')
+
     Write-Host ''
-    Write-Host '  +-------------------------------------------+' -ForegroundColor DarkCyan
-    Write-Host '  |  Reveille - wake your PC from your phone   |' -ForegroundColor DarkCyan
-    Write-Host '  +-------------------------------------------+' -ForegroundColor DarkCyan
+    for ($row = 0; $row -lt 5; $row++) {
+        Write-Host '  ' -NoNewline
+        for ($i = 0; $i -lt $word.Length; $i++) {
+            $line = $script:Glyphs[[string]$word[$i]][$row]
+            $text = ($line -replace '#', $block) -replace '\.', ' '
+            $colour = if ($i -eq 0) { 'White' } else { $gradient[$row] }
+            Write-Host "$text " -ForegroundColor $colour -NoNewline
+        }
+        Write-Host ''
+    }
+
+    Write-Host ''
+    Write-Host ('  ' + ($rule * 50)) -ForegroundColor DarkGray
+    Write-Host '   wake, lock and shut down this PC from your phone' -ForegroundColor Gray
+    Write-Host ('  ' + ($rule * 50)) -ForegroundColor DarkGray
     Write-Host ''
 }
 
