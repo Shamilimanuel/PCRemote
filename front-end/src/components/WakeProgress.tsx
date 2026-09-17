@@ -21,12 +21,18 @@ export default function WakeProgress({ watch, name }: { watch: WakeWatch; name: 
   const { theme, t } = useTheme();
   if (watch.state === 'idle') return null;
 
-  const fraction = Math.min(1, watch.elapsed / watch.giveUpSeconds);
+  // The ring fills over the first minute, which is how long a cold start takes.
+  // After that it stays full: the waiting is no longer a countdown to anything.
+  const fraction = Math.min(1, watch.elapsed / watch.confirmSeconds);
   const done = watch.state === 'awake';
   const failed = watch.state === 'gaveup';
+  // A minute up with no reply. Amber, not red -- the PC has very likely
+  // started, and is simply at a sign-in screen where nothing can answer.
+  const pending = watch.state === 'unconfirmed';
+  const settled = done || failed || pending;
 
-  const arc = done ? theme.moss : failed ? theme.danger : theme.dusk;
-  const mark = done ? '✓' : failed ? '✕' : `${watch.elapsed}s`;
+  const arc = done ? theme.moss : failed ? theme.danger : pending ? theme.waking : theme.dusk;
+  const mark = done ? '✓' : failed ? '✕' : pending ? '…' : `${watch.elapsed}s`;
 
   return (
     <View style={[styles.card, sunken(theme, 0.8)]}>
@@ -49,43 +55,61 @@ export default function WakeProgress({ watch, name }: { watch: WakeWatch; name: 
             strokeLinecap="round"
             fill="none"
             strokeDasharray={CIRCUMFERENCE}
-            strokeDashoffset={CIRCUMFERENCE * (1 - (done || failed ? 1 : fraction))}
+            strokeDashoffset={CIRCUMFERENCE * (1 - (settled ? 1 : fraction))}
             // Start the sweep at twelve o'clock rather than three.
             transform={`rotate(-90 ${SIZE / 2} ${SIZE / 2})`}
           />
         </Svg>
         <View style={styles.markWrap} pointerEvents="none">
           <Text
-            style={[
-              styles.mark,
-              { color: done || failed ? arc : theme.ink },
-              (done || failed) && styles.markBig,
-            ]}
+            style={[styles.mark, { color: settled ? arc : theme.ink }, settled && styles.markBig]}
           >
             {mark}
           </Text>
         </View>
       </View>
 
-      <Text style={[styles.line, { color: done ? theme.moss : failed ? theme.danger : theme.ink }]}>
+      <Text
+        style={[
+          styles.line,
+          { color: done ? theme.moss : failed ? theme.danger : pending ? theme.waking : theme.ink },
+        ]}
+      >
         {watch.state === 'sending'
           ? t.sendingSignal
           : watch.state === 'waiting'
-          ? t.wakingEllipsis
-          : done
-          ? t.awake
-          : t.noAnswerMinute}
+            ? t.wakingEllipsis
+            : done
+              ? t.awake
+              : pending
+                ? t.stillWaiting
+                : t.noAnswerMinute}
       </Text>
 
       <Text style={[styles.sub, { color: theme.ink3 }]}>
         {watch.state === 'sending'
           ? t.sendingSignalSub
           : watch.state === 'waiting'
-          ? t.wakingSub
-          : done
-          ? t.cameUpIn(name, watch.tookSeconds ?? 0)
-          : t.noAnswerSub}
+            ? t.wakingSub
+            : done
+              ? // A duration is only worth quoting when it measures the wake
+                // itself; past the first minute it measures when somebody
+                // signed in, which is not the same claim.
+                watch.tookSeconds !== null && watch.tookSeconds <= watch.confirmSeconds
+                ? t.cameUpIn(name, watch.tookSeconds)
+                : t.nowAwake(name)
+              : pending
+                ? t.stillWaitingSub
+                : t.noAnswerSub}
       </Text>
+
+      {/* How to make the lock screen visible here, rather than three things to
+          blame -- at this point nothing has gone wrong yet. */}
+      {pending && (
+        <View style={[styles.causes, { backgroundColor: theme.ground }]}>
+          <Text style={[styles.causeText, { color: theme.ink2 }]}>{t.lockScreenTip}</Text>
+        </View>
+      )}
 
       {failed && (
         <View style={[styles.causes, { backgroundColor: theme.ground }]}>
@@ -96,7 +120,7 @@ export default function WakeProgress({ watch, name }: { watch: WakeWatch; name: 
         </View>
       )}
 
-      {(done || failed) && (
+      {settled && (
         <ClayButton
           label={t.dismiss}
           tone="quiet"

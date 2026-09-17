@@ -2,6 +2,17 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Device } from '../types/device';
 import { pingHealth, pingPresence } from '../lib/api';
 import { sendMagicPacket } from '../lib/wol';
+import {
+  CONFIRM_SECONDS,
+  GIVE_UP_SECONDS,
+  KNOCK_EVERY_MS,
+  WakeState,
+  canConfirmFromOutside,
+  knockDelayMs,
+  phaseFor,
+} from '../lib/wakeRules';
+
+export type { WakeState };
 
 /**
  * Watches for the PC to come up after a wake signal.
@@ -14,16 +25,20 @@ import { sendMagicPacket } from '../lib/wol';
  *
  * It knocks on the lock-screen responder as well as the agent, because on a PC
  * started from fully off the agent does not exist yet -- Windows starts it when
- * someone logs in. Waiting only for the agent meant this counted all the way to
- * sixty and reported that the wake had failed, while the PC it had just woken
- * sat there at its lock screen. What this measures is whether the machine came
- * up, and it did.
+ * someone logs in.
+ *
+ * The important thing this does NOT do is claim the wake failed. On a PC that
+ * has not had the lock-screen responder installed, *nothing can answer* until
+ * somebody walks over and signs in, so silence after a minute is not evidence
+ * of anything. It used to show a red cross there, on a machine that had in fact
+ * started perfectly, and then sit on that cross even after the PC finished
+ * booting -- the only way to clear it was to leave the screen and come back.
+ *
+ * So after a minute it stops claiming progress and says what it actually knows,
+ * and it carries on listening for five minutes. It also takes confirmation from
+ * outside via confirmAwake(), because the ten-second status poll runs anyway and
+ * whichever of the two hears back first should settle it.
  */
-
-const KNOCK_EVERY_MS = 2000;
-const GIVE_UP_SECONDS = 60;
-
-export type WakeState = 'idle' | 'sending' | 'waiting' | 'awake' | 'gaveup';
 
 export type WakeWatch = {
   state: WakeState;
@@ -33,7 +48,9 @@ export type WakeWatch = {
   tookSeconds: number | null;
   start: () => Promise<void>;
   dismiss: () => void;
-  giveUpSeconds: number;
+  /** Settles the watch as awake — for when something else noticed first. */
+  confirmAwake: () => void;
+  confirmSeconds: number;
 };
 
 export function useWakeWatch(device: Device, onAwake?: () => void): WakeWatch {
@@ -43,11 +60,15 @@ export function useWakeWatch(device: Device, onAwake?: () => void): WakeWatch {
 
   const cancelled = useRef(false);
   const ticker = useRef<ReturnType<typeof setInterval> | null>(null);
-  const knocker = useRef<ReturnType<typeof setInterval> | null>(null);
+  const knocker = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const startedAt = useRef<number | null>(null);
+  // Read inside the knock loop, which must not be rebuilt on every state change.
+  const stateRef = useRef<WakeState>('idle');
+  stateRef.current = state;
 
   const stop = useCallback(() => {
     if (ticker.current) clearInterval(ticker.current);
-    if (knocker.current) clearInterval(knocker.current);
+    if (knocker.current) clearTimeout(knocker.current);
     ticker.current = null;
     knocker.current = null;
   }, []);
@@ -64,10 +85,34 @@ export function useWakeWatch(device: Device, onAwake?: () => void): WakeWatch {
 
   const dismiss = useCallback(() => {
     stop();
+    startedAt.current = null;
     setState('idle');
     setElapsed(0);
     setTookSeconds(null);
   }, [stop]);
+
+  const settleAwake = useCallback(() => {
+    stop();
+    const began = startedAt.current;
+    setTookSeconds(began === null ? null : Math.round((Date.now() - began) / 1000));
+    setState('awake');
+    onAwake?.();
+  }, [onAwake, stop]);
+
+  /**
+   * Called when the status poll saw the PC before this watch's own knock did.
+   *
+   * 'gaveup' counts as outstanding on purpose. A cross on screen while the pill
+   * beside it reads Awake is the exact thing being fixed here, and a PC that
+   * answers at minute six has still plainly started.
+   */
+  const confirmAwake = useCallback(() => {
+    if (cancelled.current) return;
+    const began = startedAt.current;
+    const elapsedMs = began === null ? null : Date.now() - began;
+    if (!canConfirmFromOutside(stateRef.current, elapsedMs)) return;
+    settleAwake();
+  }, [settleAwake]);
 
   const start = useCallback(async () => {
     stop();
@@ -78,35 +123,49 @@ export function useWakeWatch(device: Device, onAwake?: () => void): WakeWatch {
     await sendMagicPacket(device.mac, device.ip);
     if (cancelled.current) return;
 
-    const startedAt = Date.now();
+    const began = Date.now();
+    startedAt.current = began;
     setState('waiting');
 
-    const since = () => Math.round((Date.now() - startedAt) / 1000);
+    const since = () => Math.round((Date.now() - began) / 1000);
 
     ticker.current = setInterval(() => {
       if (cancelled.current) return;
       const seconds = since();
       setElapsed(seconds);
-      if (seconds >= GIVE_UP_SECONDS) {
-        stop();
-        setState('gaveup');
-      }
+      const phase = phaseFor(seconds, stateRef.current);
+      if (phase === 'gaveup') stop();
+      // Past the minute this stops claiming progress but keeps listening.
+      setState((current) => phaseFor(seconds, current));
     }, 1000);
 
-    knocker.current = setInterval(async () => {
+    // Self-scheduling rather than a fixed interval, so it can ease off from
+    // every two seconds to every five once the first minute is gone.
+    const knock = async () => {
       if (cancelled.current) return;
       try {
         await pingHealth(device).catch(() => pingPresence(device));
         if (cancelled.current) return;
-        stop();
-        setTookSeconds(since());
-        setState('awake');
-        onAwake?.();
+        settleAwake();
+        return;
       } catch {
         // Expected, repeatedly, until it isn't.
       }
-    }, KNOCK_EVERY_MS);
-  }, [device, onAwake, stop]);
+      if (cancelled.current) return;
+      const seconds = since();
+      if (seconds >= GIVE_UP_SECONDS) return;   // the ticker reports this
+      knocker.current = setTimeout(knock, knockDelayMs(seconds));
+    };
+    knocker.current = setTimeout(knock, KNOCK_EVERY_MS);
+  }, [device, settleAwake, stop]);
 
-  return { state, elapsed, tookSeconds, start, dismiss, giveUpSeconds: GIVE_UP_SECONDS };
+  return {
+    state,
+    elapsed,
+    tookSeconds,
+    start,
+    dismiss,
+    confirmAwake,
+    confirmSeconds: CONFIRM_SECONDS,
+  };
 }

@@ -53,8 +53,19 @@ export const en = {
   wakingSub: 'Checking every couple of seconds. A cold start usually takes 20 to 40.',
   cameUpIn: (name: string, seconds: number) =>
     `${name} came up in ${seconds} seconds. Everything else is available now.`,
-  noAnswerMinute: 'No answer after a minute',
-  noAnswerSub: 'The signal went out, but nothing came back.',
+  // Used when the PC turned out to be awake long after the wake was sent --
+  // usually because somebody signed in. Claiming it "came up in 340 seconds"
+  // would be measuring the wrong thing.
+  nowAwake: (name: string) => `${name} is awake. Everything else is available now.`,
+  // A minute gone with no reply. Not a failure -- on a PC without the
+  // lock-screen responder nothing *can* reply until somebody signs in.
+  stillWaiting: 'Started, but not answering yet',
+  stillWaitingSub:
+    'Your PC is most likely sitting at the sign-in screen. Reveille can’t reach it until you sign in — it will turn green by itself when you do.',
+  lockScreenTip:
+    'To see “Lock screen” here instead of this, run the setup command on your PC again and say yes when it offers to answer at the lock screen.',
+  noAnswerMinute: 'No answer after five minutes',
+  noAnswerSub: 'The signal went out, and nothing came back.',
   mostLikely: 'Most likely, in order:',
   cause1: 'Wake-on-LAN is switched off in the PC’s BIOS or its adapter settings.',
   cause2: 'The saved MAC address doesn’t match the adapter — check the Network panel.',
@@ -280,8 +291,14 @@ export const nl: Strings = {
   wakingSub: 'Elke paar seconden een controle. Koud opstarten duurt meestal 20 tot 40 seconden.',
   cameUpIn: (name: string, seconds: number) =>
     `${name} was er in ${seconds} seconden. De rest werkt nu ook.`,
-  noAnswerMinute: 'Geen antwoord na een minuut',
-  noAnswerSub: 'Het signaal is verstuurd, maar er kwam niets terug.',
+  nowAwake: (name: string) => `${name} is wakker. De rest werkt nu ook.`,
+  stillWaiting: 'Gestart, maar nog geen antwoord',
+  stillWaitingSub:
+    'Je pc staat waarschijnlijk op het aanmeldscherm. Reveille kan hem niet bereiken tot je inlogt — daarna wordt hij automatisch groen.',
+  lockScreenTip:
+    'Wil je hier “Vergrendeld” zien in plaats van dit? Voer het setup-commando op je pc nog eens uit en zeg ja als hij aanbiedt om op het vergrendelscherm te antwoorden.',
+  noAnswerMinute: 'Geen antwoord na vijf minuten',
+  noAnswerSub: 'Het signaal is verstuurd en er kwam niets terug.',
   mostLikely: 'Meest waarschijnlijk, op volgorde:',
   cause1: 'Wake-on-LAN staat uit in de BIOS van de pc of bij de netwerkadapter.',
   cause2: 'Het opgeslagen MAC-adres past niet bij de adapter — kijk bij Netwerk.',
