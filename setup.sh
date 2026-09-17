@@ -231,6 +231,62 @@ remove_all() {
   printf '\n'
 }
 
+# ------------------------------------------------------------------ token --
+
+# Throws away the pairing token and issues a new one. The companion to
+# Reset-Token in setup.ps1.
+#
+# Worth having because the token is the whole of the security model: whoever
+# holds it can shut this machine down. Before this, changing it meant editing
+# config.json by hand, so in practice nobody ever did -- a token that had been
+# seen by someone else stayed valid forever.
+reset_token() {
+  local config="$INSTALL_DIR/config.json"
+  [ -f "$config" ] || { warn "There is no pairing code here yet; install first."; return 1; }
+
+  printf '\n'
+  warn "This replaces the pairing code on this machine."
+  dim  "Every phone already paired with it stops working until it scans the new"
+  dim  "code. That is exactly what makes it useful if the old one has been seen"
+  dim  "by someone else."
+  printf '\n'
+
+  local answer=""
+  if [ -r /dev/tty ]; then
+    read -r -p "  Type yes to continue: " answer < /dev/tty
+  fi
+  if [ "$(printf '%s' "$answer" | tr -d '[:space:]')" != "yes" ]; then
+    dim "Left alone."
+    return 1
+  fi
+
+  # 24 random bytes as hex, matching generateToken in back-end/src/config.js.
+  # node is already a requirement, so use it rather than hoping for openssl.
+  local token
+  token="$(node -e 'process.stdout.write(require("crypto").randomBytes(24).toString("hex"))')" \
+    || { warn "Could not generate a new code."; return 1; }
+
+  node -e '
+    const fs = require("fs");
+    const [file, token] = process.argv.slice(1);
+    const config = JSON.parse(fs.readFileSync(file, "utf8").replace(/^﻿/, ""));
+    config.token = token;
+    fs.writeFileSync(file, JSON.stringify(config, null, 2) + "\n", "utf8");
+  ' "$config" "$token" || { warn "config.json could not be rewritten."; return 1; }
+
+  ok "New pairing code issued."
+
+  step "Restarting so the new code takes effect..."
+  if [ "$OS" = macos ]; then
+    launchctl unload "$LAUNCH_AGENT" 2>/dev/null || true
+    launchctl load "$LAUNCH_AGENT" 2>/dev/null || true
+  elif command -v systemctl >/dev/null 2>&1; then
+    systemctl --user restart reveille.service 2>/dev/null || true
+  fi
+  sleep 2
+  return 0
+}
+
 # -------------------------------------------------------------------- menu --
 
 # Shown when an install already exists. The one-line command is the only thing
@@ -249,7 +305,8 @@ show_menu() {
   printf '   %s1%s  Update to the latest version\n' "$C_BOLD" "$C_OFF"
   printf '   %s2%s  Repair  %s(reinstall, re-register, restart)%s\n' "$C_BOLD" "$C_OFF" "$C_DIM" "$C_OFF"
   printf '   %s3%s  Show the pairing code\n' "$C_BOLD" "$C_OFF"
-  printf '   %s4%s  Remove Reveille\n' "$C_BOLD" "$C_OFF"
+  printf '   %s4%s  New pairing code  %s(revokes the old one)%s\n' "$C_BOLD" "$C_OFF" "$C_DIM" "$C_OFF"
+  printf '   %s5%s  Remove Reveille\n' "$C_BOLD" "$C_OFF"
   printf '   %sQ%s  Quit\n' "$C_BOLD" "$C_OFF"
   printf '\n'
 
@@ -265,7 +322,8 @@ show_menu() {
     1) echo update ;;
     2) echo repair ;;
     3) echo pair ;;
-    4) echo remove ;;
+    4) echo rotate ;;
+    5) echo remove ;;
     *) echo quit ;;
   esac
 }
@@ -283,6 +341,7 @@ if [ -f "$INSTALL_DIR/package.json" ] && [ -d "$INSTALL_DIR/node_modules" ]; the
     quit)   printf '\n'; exit 0 ;;
     remove) remove_all; exit 0 ;;
     pair)   ( cd "$INSTALL_DIR" && node pair.js ); exit 0 ;;
+    rotate) if reset_token; then ( cd "$INSTALL_DIR" && node pair.js ); fi; exit 0 ;;
     *)      printf '\n' ;;
   esac
 fi

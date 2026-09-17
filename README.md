@@ -398,11 +398,93 @@ loses them.
 
 ## Security notes
 
-- The agent's token is a random secret generated per-install (`back-end/config.json`,
-  gitignored). Anyone with the token and LAN access can control the PC, so don't share
-  it and don't expose the agent's port outside your home network / router.
-- All the agent does is run four fixed OS commands (`shutdown`, `rundll32` for sleep/
-  lock) gated by that token — it doesn't accept arbitrary commands.
+The agent speaks plain HTTP and cannot honestly do otherwise: a self-signed
+certificate makes the phone refuse the connection, no certificate authority
+will issue one for `192.168.1.72`, and pinning a per-install certificate in
+React Native needs a native module and compile-time configuration — there is
+nothing to pin at build time. So the traffic is readable on your network.
+
+What matters is that **there is nothing worth reading in it.**
+
+### The token never crosses the wire
+
+It used to. Every poll, every ten seconds, carried `Authorization: Bearer
+<token>` — so anyone watching the network could read it once and then shut the
+machine down, restart it, or reboot it into firmware settings whenever they
+liked.
+
+Now the token is a key, not a password. Each request is signed with it and only
+the signature is sent:
+
+```
+Authorization: Reveille <timestamp>.<nonce>.<HMAC-SHA256>
+```
+
+The signature covers the method, the path, a hash of the body, the timestamp
+and the nonce, so it is worthless for anything except the exact request it was
+computed for. Change `lock` to `shutdown` and it stops verifying.
+
+- **Replay** is refused: timestamps outside ±30 seconds are rejected, and each
+  nonce is accepted once.
+- **A fake agent** is detectable: the agent signs its replies too, bound to the
+  nonce your phone chose, so a recorded reply cannot be played back to claim a
+  PC is awake when it is not.
+- **The web version signs too.** `crypto.subtle` does not exist over plain
+  HTTP, so `back-end/web/sign.js` implements SHA-256 and HMAC directly. Every
+  value in it is checked against Node's own crypto by `tools/check-websign.js`
+  — a hand-rolled hash that is subtly wrong fails silently and identically
+  every time, which is the worst way for a hash to be wrong.
+
+This is the scheme behind AWS's SigV4 and Hawk. It is not clever, which is the
+point. Both implementations are checked against each other by
+`front-end/src/lib/signing.test.ts`; if they ever drift, every request fails at
+once, on every device, with an error that says only "Unauthorized".
+
+### Off-network requests are refused
+
+The agent binds `0.0.0.0` because it has to answer your phone on whatever
+interface that arrives by. That means one port-forward rule in a router — added
+by someone who wanted to reach their PC from work — would otherwise turn this
+into a remote shutdown service for the entire internet.
+
+So the peer address is checked as well as the signature, and anything that is
+not loopback, RFC1918 private, link-local, or in Tailscale's `100.64.0.0/10`
+range gets a 403 and nothing else — not even the web page. Tailscale is allowed
+on purpose, because the app's remote-address option exists precisely so this
+works away from home over a private network.
+
+`REVEILLE_ALLOW_PUBLIC=1` turns that off, deliberately and at your own risk.
+
+### On the phone
+
+The token lives in `expo-secure-store`, which is backed by the Android
+Keystore, rather than in the app's ordinary preferences file. Devices saved
+before this change are moved across the first time the list is read, so nobody
+has to pair again.
+
+### Revoking a token
+
+Run the setup command again and choose **New pairing code**. It issues a fresh
+token, restarts the agent and the lock-screen responder, and shows the new QR
+code. Every paired phone stops working until it scans it — which is the point,
+if the old one has been seen by someone else.
+
+Before this existed, changing the token meant editing `config.json` by hand, so
+in practice a leaked token stayed valid forever.
+
+### What this still does not do
+
+- **The reply bodies are readable.** Hostname, uptime, CPU, memory and disk
+  cross the network in the clear. They are signed, so nobody can forge or alter
+  them, but they are not encrypted.
+- **Bearer tokens are still accepted**, because the app and the agent are
+  updated separately and whoever updates one first should not lose control of
+  their own PC. `REVEILLE_REQUIRE_SIGNING=1` on the agent turns that off today;
+  it will become the default once signing has been out long enough.
+- **All the agent can do is run a fixed set of OS commands** — shutdown,
+  restart, sleep, lock, and triggering one pre-registered elevated task for
+  reboot-to-firmware. It never accepts an arbitrary command, whatever the
+  signature says.
 
 ## Project layout
 
