@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Device } from '../types/device';
@@ -77,6 +77,15 @@ export default function ControlScreen({ device, onBack, onEdit, onSettings }: Pr
   // Wake gets its own, more insistent watcher: the ordinary poll is every ten
   // seconds, which is far too slow to feel like an answer.
   const wake = useWakeWatch(device, refresh);
+
+  // Whichever of the two hears back first settles the wake. Without this the
+  // watcher could still be waiting -- or have stopped claiming progress -- while
+  // the status pill beside it already reads Awake, which is how a PC that had
+  // started perfectly ended up showing a cross until you left the screen.
+  const confirmAwake = wake.confirmAwake;
+  useEffect(() => {
+    if (status === 'online' || status === 'locked') confirmAwake();
+  }, [status, confirmAwake]);
 
   const clearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
