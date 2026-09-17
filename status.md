@@ -114,7 +114,7 @@ No test runner is wired up on purpose — these need no install and no config.
   clients sign requests or use the bearer path.
 
 - [ ] **Rewrite the agent in Go**
-  The whole agent is ~1,400 lines. Go gives one ~8–12 MB binary with no
+  The whole agent is ~1,700 lines. Go gives one ~8–12 MB binary with no
   runtime: no Node install, no npm, no execution-policy failure mode, and 97
   dependencies become about 2. `setup.ps1` would lose more than half its length
   and most of its ways to fail. CI cross-compiles all five targets from one
