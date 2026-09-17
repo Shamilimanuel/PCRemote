@@ -484,6 +484,72 @@ function Test-Agent {
     return $null
 }
 
+# --------------------------------------------------------------- pairing --
+
+<#
+    Throws away the pairing token and issues a new one.
+
+    Worth having because the token is the whole of the security model: whoever
+    holds it can shut this machine down. Before this, changing it meant editing
+    config.json by hand, so in practice nobody ever did -- a token that leaked
+    stayed valid forever.
+
+    Every paired phone stops working and has to scan again. That is the point.
+#>
+function Reset-Token {
+    param([string]$Destination)
+
+    $configPath = Join-Path $Destination 'config.json'
+    if (-not (Test-Path $configPath)) {
+        Write-Warn2 '  There is no pairing code here yet; install first.'
+        return $false
+    }
+
+    Write-Host ''
+    Write-Warn2 '  This replaces the pairing code on this PC.'
+    Write-Dim   '  Every phone already paired with it stops working until it scans'
+    Write-Dim   '  the new code. That is exactly what makes it useful if the old'
+    Write-Dim   '  one has been seen by someone else.'
+    Write-Host ''
+    $answer = Read-Host '  Type yes to continue'
+    if ($answer.Trim().ToLower() -ne 'yes') {
+        Write-Dim '  Left alone.'
+        return $false
+    }
+
+    try {
+        $config = Get-Content $configPath -Raw | ConvertFrom-Json
+    } catch {
+        Write-Warn2 '  config.json could not be read. Try Repair instead.'
+        return $false
+    }
+
+    # 24 random bytes as hex, matching generateToken in back-end/src/config.js.
+    $bytes = New-Object byte[] 24
+    [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+    $config.token = -join ($bytes | ForEach-Object { $_.ToString('x2') })
+
+    # No BOM: JSON.parse rejects one, and the agent reads this file.
+    [System.IO.File]::WriteAllText(
+        $configPath,
+        ($config | ConvertTo-Json -Depth 6),
+        (New-Object System.Text.UTF8Encoding $false))
+
+    Write-Ok '  New pairing code issued.'
+
+    # Both the agent and the lock-screen responder hold the old one in memory.
+    Write-Step 'Restarting so the new code takes effect...'
+    foreach ($name in @($TaskName, $PresenceTask)) {
+        if (Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue) {
+            Stop-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue
+            Start-Sleep -Milliseconds 400
+            Start-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue
+        }
+    }
+    Start-Sleep -Seconds 2
+    return $true
+}
+
 # ----------------------------------------------------------------- menu --
 
 <#
@@ -516,7 +582,9 @@ function Show-Menu {
     Write-Host '   2  Repair  ' -ForegroundColor White -NoNewline
     Write-Dim '(reinstall, re-register, restart)'
     Write-Host '   3  Show the pairing code' -ForegroundColor White
-    Write-Host '   4  Remove Reveille' -ForegroundColor White
+    Write-Host '   4  New pairing code  ' -ForegroundColor White -NoNewline
+    Write-Dim '(revokes the old one)'
+    Write-Host '   5  Remove Reveille' -ForegroundColor White
     Write-Host '   Q  Quit' -ForegroundColor White
     Write-Host ''
 
@@ -525,7 +593,8 @@ function Show-Menu {
         '1' { return 'update' }
         '2' { return 'repair' }
         '3' { return 'pair' }
-        '4' { return 'remove' }
+        '4' { return 'rotate' }
+        '5' { return 'remove' }
         'Q' { return 'quit' }
         default {
             Write-Warn2 '  Not one of the options.'
@@ -593,6 +662,12 @@ if ($alreadyInstalled -and -not $Firmware -and -not $NoAutoStart -and
         'quit'   { Write-Host ''; return }
         'remove' { Invoke-Uninstall; return }
         'pair'   { Show-PairingCode -Destination $InstallDir -NodePath $nodePath; return }
+        'rotate' {
+            if (Reset-Token -Destination $InstallDir) {
+                Show-PairingCode -Destination $InstallDir -NodePath $nodePath
+            }
+            return
+        }
         'repair' { $repairing = $true; Write-Host '' }
         'update' { Write-Host '' }
     }

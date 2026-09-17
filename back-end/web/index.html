@@ -221,6 +221,7 @@
   </section>
 </main>
 
+<script src="sign.js"></script>
 <script>
 (function () {
   "use strict";
@@ -284,20 +285,35 @@
 
   var token = localStorage.getItem(KEY) || '';
 
+  /*
+     The token signs each request and stays in this browser; it is no longer
+     sent. See sign.js for why that matters on a network where the traffic is
+     plain HTTP and cannot be anything else.
+  */
   async function api(path, options) {
     var controller = new AbortController();
     var timer = setTimeout(function () { controller.abort(); }, 6000);
     try {
+      var method = ((options && options.method) || 'GET').toUpperCase();
+      var body = (options && typeof options.body === 'string') ? options.body : '';
+      var signed = signRequest(token, method, path, body);
+
       var response = await fetch(path, Object.assign({}, options, {
         signal: controller.signal,
         headers: Object.assign({
-          Authorization: 'Bearer ' + token,
+          Authorization: signed.authorization,
           'Content-Type': 'application/json'
         }, (options && options.headers) || {})
       }));
       if (response.status === 401) throw new Error('401');
       if (!response.ok) throw new Error(String(response.status));
-      return await response.json();
+
+      /* Read the text, because the reply's signature covers the exact bytes. */
+      var text = await response.text();
+      if (!verifyResponse(token, signed.nonce, text, response.headers.get('X-Reveille-Signature'))) {
+        throw new Error('That reply did not come from your PC.');
+      }
+      return text ? JSON.parse(text) : {};
     } finally {
       clearTimeout(timer);
     }

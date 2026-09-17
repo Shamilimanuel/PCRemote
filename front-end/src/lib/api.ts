@@ -1,4 +1,5 @@
 import { Device, HealthResponse, PendingAction, Route } from '../types/device';
+import { signRequest, verifyResponse } from './signing';
 
 const TIMEOUT_MS = 5000;
 // Background polls shouldn't hold a spinner for five seconds on a PC that is
@@ -28,23 +29,57 @@ async function once(target: Target, device: Device, path: string, init: RequestI
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
+  // The token is a key now, not a password to hand over. It signs the request
+  // and stays on the phone -- see lib/signing.ts for why that matters on a
+  // network where anything could be listening.
+  const method = (init?.method ?? 'GET').toUpperCase();
+  const body = typeof init?.body === 'string' ? init.body : '';
+  const signed = signRequest(device.token, method, path, body);
+
   try {
     const response = await fetch(`${target.url}${path}`, {
       ...init,
       signal: controller.signal,
       headers: {
         ...(init?.headers ?? {}),
-        Authorization: `Bearer ${device.token}`,
+        Authorization: signed.authorization,
         'Content-Type': 'application/json',
       },
     });
 
+    // Read as text, because the reply's signature covers the exact bytes sent.
+    // Parsing first and re-serialising would check a different string.
+    const text = await response.text();
+
     if (!response.ok) {
-      const body = await response.json().catch(() => ({}));
-      throw new Error(body.error || `Request failed with status ${response.status}`);
+      let message = `Request failed with status ${response.status}`;
+      try {
+        const parsed = JSON.parse(text);
+        if (parsed?.error) message = parsed.error;
+      } catch {
+        // A non-JSON error body is still an error; the status stands.
+      }
+      throw new Error(message);
     }
 
-    return response.json().catch(() => ({}));
+    // An agent holding the same token is the only thing that can produce this.
+    // An older agent sends nothing, which is accepted so that updating the app
+    // first does not lock anyone out of their own PC.
+    const verdict = verifyResponse(
+      device.token,
+      signed.nonce,
+      text,
+      response.headers.get('X-Reveille-Signature')
+    );
+    if (!verdict.ok) {
+      throw new Error("That reply didn't come from your PC. Check the address and pair again.");
+    }
+
+    try {
+      return text ? JSON.parse(text) : {};
+    } catch {
+      return {};
+    }
   } finally {
     clearTimeout(timeout);
   }
