@@ -97,11 +97,14 @@ No test runner is wired up on purpose — these need no install and no config.
 
 ## Next up
 
-- [x] **Distribution, part one: Obtainium and the store listing** *(18 Sep)*
-  Obtainium needed nothing built — it reads GitHub releases, and `reveille.apk`
-  has been the filename on every release, so it already worked. It is now
-  documented in the README as the way to get updates, which is the thing to
-  send a friend.
+- [x] **Distribution, part one: the store listing** *(18 Sep)*
+  **Correction to an earlier note in this file:** in-app updates already work
+  and have for a while — the app checks the releases page when opened, shows a
+  banner and a Get it button, and installs the new APK. Obtainium was written
+  up as if it fixed that. It does not; it is a minor convenience (it can notice
+  a release without Reveille being opened) and the README now says so honestly.
+  It does work out of the box, since `reveille.apk` is the filename on every
+  release.
   Store metadata written in the Fastlane layout that F-Droid and IzzyOnDroid
   both read (`fastlane/metadata/`), in English and Dutch, and the release
   workflow now puts the changelog at the top of the GitHub release so a release
@@ -118,11 +121,19 @@ No test runner is wired up on purpose — these need no install and no config.
   one issue at <https://gitlab.com/IzzyOnDroid/repo/-/issues>.
   IzzyOnDroid takes the prebuilt APK, appears inside any F-Droid client, costs
   nothing and has no age requirement — it is the realistic version of "get on
-  F-Droid". Main F-Droid builds from source on their own infrastructure, which
+  F-Droid". **The point of it is discovery, not updates** — updates are already
+  solved in the app. Nobody can install something they have never heard of, and
+  a listing is the only part of this a stranger could stumble across. Main F-Droid builds from source on their own infrastructure, which
   for an Expo app is a much larger undertaking; worth attempting only after
   IzzyOnDroid is live.
   *Google Play is $25 one-time but needs an 18+ Google Payments account and a
   14-day closed test with 12+ testers first. Worth doing eventually, not first.*
+
+- [ ] **Show the changelog in the update banner**
+  Small, and it connects the two halves. The banner says a version is available
+  and offers Get it, but never says what changed — while the release body now
+  leads with plain-English notes from `fastlane/.../changelogs/`. The updater
+  already fetches that release and throws the text away. Roughly an hour.
 
 - [ ] **Document the agent's REST API, then a Home Assistant integration**
   The cheapest large win available. The authenticated HTTP API already exists;
