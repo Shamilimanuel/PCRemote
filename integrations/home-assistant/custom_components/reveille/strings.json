@@ -1,0 +1,51 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Add a computer",
+        "description": "Everything here is on the pairing screen the setup command shows on the computer. Run it again and choose \"Show the pairing code\" if you need it.",
+        "data": {
+          "host": "Address",
+          "port": "Port",
+          "token": "Pairing code",
+          "mac": "MAC address (for waking)",
+          "name": "Name"
+        },
+        "data_description": {
+          "host": "The computer's address on your network, such as 192.168.1.50.",
+          "token": "The long code from the pairing screen. It is never sent over your network — it signs each request instead.",
+          "mac": "Only needed to wake the computer from off. Leave it empty and it will be filled in from the computer itself.",
+          "name": "Leave empty to use the computer's own name."
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Nothing answered at that address. Check the computer is awake and the address and port are right.",
+      "bad_token": "That pairing code was refused. Run the setup command on the computer and choose \"Show the pairing code\".",
+      "bad_mac": "That is not a MAC address. It should look like A1:B2:C3:D4:E5:F6."
+    },
+    "abort": {
+      "already_configured": "That computer has already been added."
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "awake": { "name": "Awake" },
+      "signed_in": { "name": "Signed in" }
+    },
+    "button": {
+      "wake": { "name": "Wake" },
+      "shutdown": { "name": "Shut down" },
+      "restart": { "name": "Restart" },
+      "sleep": { "name": "Sleep" },
+      "lock": { "name": "Lock" },
+      "firmware": { "name": "Reboot to BIOS" }
+    },
+    "sensor": {
+      "cpu": { "name": "Processor" },
+      "memory": { "name": "Memory used" },
+      "disk_free": { "name": "Disk free" },
+      "uptime": { "name": "Uptime" }
+    }
+  }
+}

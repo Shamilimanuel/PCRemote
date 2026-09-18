@@ -1,0 +1,12 @@
+{
+  "domain": "reveille",
+  "name": "Reveille",
+  "codeowners": ["@Shamilimanuel"],
+  "config_flow": true,
+  "documentation": "https://github.com/Shamilimanuel/PCRemote/blob/main/integrations/home-assistant/README.md",
+  "integration_type": "device",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/Shamilimanuel/PCRemote/issues",
+  "requirements": [],
+  "version": "1.0.0"
+}
