@@ -230,27 +230,28 @@ Reveille is not on Google Play. It is an Android APK on the
 download `reveille.apk`, open it, and allow your browser to install apps when
 Android asks. It installs over any earlier version and keeps your saved PCs.
 
-That works, but it means checking back by hand every time there is an update.
+### Updates
 
-### Getting updates automatically — Obtainium
+The app handles these itself. It checks the releases page when you open it, and
+if there is a newer version it says so and offers a **Get it** button that
+downloads the new APK. Android will ask you to confirm the install, and may warn
+about an app from an unrecognised source — that check is Android's, and it
+applies to any app not installed from a recognised store.
 
-[Obtainium](https://github.com/ImranR98/Obtainium) installs apps straight from
-their GitHub releases and then keeps them up to date, which is the part the
-manual download does not do. It is free, open source, and needs nothing from
-this project.
+So there is nothing to set up, and nothing to remember.
 
-1. Install Obtainium (from
-   [its own releases](https://github.com/ImranR98/Obtainium/releases/latest),
-   or from F-Droid).
-2. Tap **Add App**.
-3. Paste `https://github.com/Shamilimanuel/PCRemote` and tap **Add**.
+### Obtainium, if you want it anyway
 
-That is the whole setup. Obtainium finds `reveille.apk` on each release by
-itself — the file is named the same every time on purpose — and tells you when
-a new one appears.
+[Obtainium](https://github.com/ImranR98/Obtainium) installs apps from their
+GitHub releases and watches for new ones. Reveille works with it out of the box
+— paste `https://github.com/Shamilimanuel/PCRemote` into **Add App** and it
+finds `reveille.apk` by itself, since the filename is the same on every release
+on purpose.
 
-This is the easiest thing to pass to a friend: one link, and they never have to
-be told about an update again.
+It is worth it if you already keep several sideloaded apps that way, or if you
+want to be told about a new version without opening Reveille first. If you only
+have this one app, the built-in check already covers you, and Obtainium is an
+extra app to install for very little.
 
 ### Why not Google Play
 
@@ -262,11 +263,14 @@ publish. For an app with no users yet, that is a wall rather than a step.
 
 The plan instead is [IzzyOnDroid](https://apt.izzysoft.de/fdroid/), a
 well-known third-party F-Droid repository that builds its listings from GitHub
-releases. It asks for no money and no age, it appears inside any F-Droid
-client, and it gives proper automatic updates. Reveille already meets its
-requirements: MIT licensed, no adverts, no analytics, and no proprietary or
-tracking libraries of any kind — `fastlane/metadata/` here is the listing it
-reads.
+releases. It asks for no money and no age, and it appears inside any F-Droid
+client. Reveille already meets its requirements: MIT licensed, no adverts, no
+analytics, and no proprietary or tracking libraries of any kind —
+`fastlane/metadata/` here is the listing it reads.
+
+The point of that is **being found**, not being updated. Updates already work.
+Nobody can install an app they have never heard of, and a listing is the only
+part of this that a stranger can stumble across.
 
 ## 3. Build the phone app yourself
 
