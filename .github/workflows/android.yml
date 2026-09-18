@@ -146,19 +146,26 @@ jobs:
             echo "- SHA-256: \`${SUM}\`"
           } > notes.md
 
-          # A push that does not bump the version would otherwise fail here:
-          # `gh release create` refuses a tag that already exists, and that is
-          # exactly what a docs or workflow change looks like. Replace the
-          # asset on the existing release instead of falling over.
+          # Work now lands in batches: several changes go to main, and the
+          # version in app.json is bumped once when they are worth releasing
+          # together. So a push whose version already has a release is normal,
+          # and it must leave that release alone.
+          #
+          # This used to replace the APK instead, which was reasonable when
+          # every push was a release and wrong now: the download behind v1.0.20
+          # would quietly become different code on every push while still
+          # calling itself v1.0.20, and two people installing it a day apart
+          # would get different apps. The build above still ran, so a push that
+          # breaks the app still fails here -- it just does not publish.
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "Release $TAG already exists - replacing its APK."
-            gh release upload "$TAG" "$APK" --repo "$GITHUB_REPOSITORY" --clobber
-            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file notes.md
-          else
-            gh release create "$TAG" "$APK" \
-              --repo "$GITHUB_REPOSITORY" \
-              --title "Reveille $TAG" \
-              --notes-file notes.md \
-              --latest
+            echo "Release $TAG already exists. Built and verified; not publishing."
+            echo "Bump expo.version in front-end/app.json to cut a new release."
+            exit 0
           fi
+
+          gh release create "$TAG" "$APK" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Reveille $TAG" \
+            --notes-file notes.md \
+            --latest
         working-directory: .

@@ -1,7 +1,7 @@
 # Reveille — status and checklist
 
 Working notes, kept so a new chat can pick up without re-deriving anything.
-Last updated: **18 September 2026**, at **v1.0.18**.
+Last updated: **18 September 2026**, at **v1.0.20**.
 
 **How we work this list:** items are worked top to bottom. Pick one, say the
 name, and it gets built. When it is done it gets checked off here and we move
@@ -15,7 +15,7 @@ my call.
 
 | | |
 |---|---|
-| Version | **1.0.18** (versionCode 10018) |
+| Version | **1.0.20** (versionCode 10020) |
 | Repo | `github.com/Shamilimanuel/PCRemote` (public, MIT) |
 | Install (Windows) | `irm github.com/Shamilimanuel/PCRemote/raw/main/setup.ps1 \| iex` |
 | Install (macOS/Linux) | `curl -fsSL github.com/Shamilimanuel/PCRemote/raw/main/setup.sh \| bash` |
@@ -28,6 +28,21 @@ my call.
 every installed app unable to update. `expo.version` in `front-end/app.json` is
 the hand-set source of truth; CI derives `versionCode` from it. The keystore in
 `secrets/` is gitignored and must never be committed.
+
+### Releasing
+
+Work lands on `main` in batches. The version in `front-end/app.json` is bumped
+**once**, when a group of changes is worth releasing together — not per change.
+
+A push whose version already has a release is normal and expected: CI builds it,
+proves it compiles, and publishes nothing. Cutting a release is exactly one act:
+bump `expo.version`, add `fastlane/metadata/android/*/changelogs/<versionCode>.txt`,
+push.
+
+*Before 18 September this shipped one release per change, and CI replaced the
+APK on the existing release when the version had not moved. That is now refused
+— it meant the download behind a version number could quietly change, so two
+people installing "the same" version got different apps.*
 
 ### Running the checks
 
