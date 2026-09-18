@@ -223,7 +223,52 @@ still reads as offline, exactly as before.
 The browser version can't show this state at all, and shouldn't — it is served *by* the
 agent, so if you can load the page, the agent is already running.
 
-## 2. Build the phone app
+## 2. Get the app on your phone
+
+Reveille is not on Google Play. It is an Android APK on the
+[Releases page](https://github.com/Shamilimanuel/PCRemote/releases/latest) —
+download `reveille.apk`, open it, and allow your browser to install apps when
+Android asks. It installs over any earlier version and keeps your saved PCs.
+
+That works, but it means checking back by hand every time there is an update.
+
+### Getting updates automatically — Obtainium
+
+[Obtainium](https://github.com/ImranR98/Obtainium) installs apps straight from
+their GitHub releases and then keeps them up to date, which is the part the
+manual download does not do. It is free, open source, and needs nothing from
+this project.
+
+1. Install Obtainium (from
+   [its own releases](https://github.com/ImranR98/Obtainium/releases/latest),
+   or from F-Droid).
+2. Tap **Add App**.
+3. Paste `https://github.com/Shamilimanuel/PCRemote` and tap **Add**.
+
+That is the whole setup. Obtainium finds `reveille.apk` on each release by
+itself — the file is named the same every time on purpose — and tells you when
+a new one appears.
+
+This is the easiest thing to pass to a friend: one link, and they never have to
+be told about an update again.
+
+### Why not Google Play
+
+Mostly because of what it would cost in the wrong currency. A Play developer
+account is $25 once, which is fine, but it needs a Google Payments account —
+so an adult's name on it — and since 2023 a new personal account has to run a
+closed test with twelve testers for fourteen days before it may even apply to
+publish. For an app with no users yet, that is a wall rather than a step.
+
+The plan instead is [IzzyOnDroid](https://apt.izzysoft.de/fdroid/), a
+well-known third-party F-Droid repository that builds its listings from GitHub
+releases. It asks for no money and no age, it appears inside any F-Droid
+client, and it gives proper automatic updates. Reveille already meets its
+requirements: MIT licensed, no adverts, no analytics, and no proprietary or
+tracking libraries of any kind — `fastlane/metadata/` here is the listing it
+reads.
+
+## 3. Build the phone app yourself
 
 The app uses three native modules — `react-native-udp` (Wake-on-LAN needs a real UDP
 socket), `react-native-svg`, and AsyncStorage — so it **cannot run in Expo Go**. You have

@@ -1,0 +1,41 @@
+Reveille maakt van je telefoon de aan-uitknop van je computer.
+
+Vernoemd naar het signaal waarmee een kazerne bij zonsopgang wordt gewekt. Het
+doet één ding, en probeert dat goed te doen: je Windows-, macOS- of Linux-machine
+starten, afsluiten, herstarten, in slaapstand zetten en vergrendelen, via je
+eigen wifi.
+
+<b>Installeren</b>
+
+Eén regel plakken in een terminal op de computer. Hij installeert wat nodig is,
+zorgt dat hij start als je inlogt, en laat een QR-code zien om te scannen. Geen
+account, geen registratie, en geen beheerdersrechten voor de gewone installatie.
+
+<b>Wat het kan</b>
+
+* Een volledig uitgeschakelde computer wekken met Wake-on-LAN
+* Afsluiten, herstarten, slaapstand en vergrendelen
+* Afsluiten of herstarten met een timer, en dat weer annuleren
+* Rechtstreeks naar het BIOS of firmware-scherm herstarten (alleen Windows, en
+  alleen als je ja zegt wanneer erom gevraagd wordt)
+* Laten zien wat de machine doet: processor, geheugen en schijf
+* Melden dat de machine nog op het aanmeldscherm staat, in plaats van te doen
+  alsof hij uit staat
+
+<b>Het blijft op je eigen netwerk</b>
+
+Geen clouddienst, geen account, geen telemetrie. Je telefoon praat rechtstreeks
+met je computer via je eigen wifi, en er gaat niets ergens anders heen. Verzoeken
+van buiten je lokale netwerk worden geweigerd.
+
+Ook het koppelgeheim gaat nooit over het netwerk: elk verzoek wordt ermee
+ondertekend, dus wie het verkeer afluistert leert niets bruikbaars. Handtekeningen
+kunnen niet hergebruikt worden, en de computer ondertekent zijn antwoorden zodat
+je telefoon hem kan onderscheiden van iets anders dat antwoordt.
+
+<b>Open source</b>
+
+MIT-licentie, geen advertenties, geen tracking, geen enkele analytics-bibliotheek.
+Alles is in een middag door te lezen:
+
+https://github.com/Shamilimanuel/PCRemote

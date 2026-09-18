@@ -1,0 +1,9 @@
+Je koppelgeheim gaat niet langer over het netwerk. Elk verzoek wordt er nu mee
+ondertekend, dus wie meekijkt leert niets bruikbaars, en een opgevangen verzoek
+kan niet hergebruikt worden. Je computer ondertekent ook zijn antwoorden, zodat
+de app hem kan onderscheiden van iets anders.
+
+Verzoeken van buiten je eigen netwerk worden nu geweigerd.
+
+De koppelcode kan vervangen worden via het setup-commando, en op de telefoon
+staat het geheim nu in de Android-sleutelopslag.
