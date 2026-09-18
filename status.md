@@ -4,10 +4,20 @@ Working notes, kept so a new chat can pick up without re-deriving anything.
 Last updated: **18 September 2026**, at **v1.0.20**.
 
 **How we work this list:** items are worked top to bottom. Pick one, say the
-name, and it gets built. When it is done it gets checked off here and we move
+name, and it gets built. When it is done it moves to *Recently done* and we go
 to the next. New ideas go in *Ideas, parked* until they earn a place in *Next
 up* — and anything marked **← recommended** is what I would do next if it were
 my call.
+
+### Picking this up again
+
+Three of the five open items are waiting on hardware rather than on code — a
+phone, a machine that stays on, a Mac. **The Go rewrite is the one that can be
+started cold**, and `docs/api.md` is the specification it needs.
+
+The quickest thing worth doing first takes five minutes and needs no computer:
+four screenshots from the phone, which unblock the IzzyOnDroid listing. See
+`fastlane/README.md` for which ones.
 
 ---
 
