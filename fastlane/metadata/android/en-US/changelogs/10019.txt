@@ -1,0 +1,8 @@
+Button sounds work when your phone is on vibrate or silent.
+
+They were being suppressed by Android whenever the ringer was down, which is
+most of the time for most people, while the Sound switch in Settings sat there
+turned on promising otherwise. That switch is now the only thing that silences
+them.
+
+Pressing the same button twice in a row could also lose the second sound.
