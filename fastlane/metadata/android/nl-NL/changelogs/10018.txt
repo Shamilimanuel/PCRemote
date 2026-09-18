@@ -1,0 +1,5 @@
+Als er een nieuwe versie is, laat de app nu zien wat er veranderd is. Eerder
+kreeg je alleen een versienummer en een knop, en dan installeer je iets puur
+omdat een getal omhoog is gegaan.
+
+Langere teksten klappen in achter een Meer-link, zodat de melding klein blijft.

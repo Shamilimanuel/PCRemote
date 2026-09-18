@@ -1,0 +1,5 @@
+When there is a new version, the app now tells you what changed in it. Before
+this it offered a version number and a button, which asks you to install
+something on the strength of a number going up.
+
+Longer notes collapse behind a More link so the banner stays out of the way.
