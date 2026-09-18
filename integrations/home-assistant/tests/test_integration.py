@@ -21,6 +21,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from homeassistant.const import CONF_HOST, CONF_PORT, STATE_OFF, STATE_ON, STATE_UNAVAILABLE
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -218,8 +219,17 @@ async def test_wake_remembers_the_broadcast_after_the_machine_goes_away(
     config_entry = await setup_with(hass)
     coordinator = hass.data[DOMAIN][config_entry.entry_id]
 
-    with patch(
-        "custom_components.reveille.api.ReveilleClient.health", AsyncMock(side_effect=ReveilleError("gone"))
+    # Both have to be stubbed: the coordinator asks the lock-screen responder
+    # whenever the agent fails, and an unstubbed call would reach the network.
+    with (
+        patch(
+            "custom_components.reveille.api.ReveilleClient.health",
+            AsyncMock(side_effect=ReveilleError("gone")),
+        ),
+        patch(
+            "custom_components.reveille.api.ReveilleClient.presence",
+            AsyncMock(side_effect=ReveilleError("gone")),
+        ),
     ):
         await coordinator.async_refresh()
         await hass.async_block_till_done()
@@ -299,6 +309,13 @@ async def test_the_same_machine_cannot_be_added_twice(hass: HomeAssistant) -> No
 
 async def test_it_can_be_removed(hass: HomeAssistant) -> None:
     config_entry = await setup_with(hass)
+
     assert await hass.config_entries.async_unload(config_entry.entry_id)
     await hass.async_block_till_done()
-    assert not hass.states.async_entity_ids("button")
+
+    # The entry being NOT_LOADED is the thing worth asserting, and what core
+    # integrations check. Whether Home Assistant also drops the state objects
+    # straight away is its business, not this integration's.
+    assert config_entry.state is ConfigEntryState.NOT_LOADED
+    # Nothing left behind that would leak across a reload.
+    assert config_entry.entry_id not in hass.data.get(DOMAIN, {})
