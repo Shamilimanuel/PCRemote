@@ -177,15 +177,37 @@ outside. Host networking, or a bridge on an RFC1918 range, both work.
 
 ---
 
-## What has and has not been tested
+## How this is tested
 
-The client underneath — signing, reply verification, the error handling, the
-magic packet — is checked against a real running agent, and its signatures are
+The client underneath — signing, reply verification, error handling, the magic
+packet — is checked against a real running agent, and its signatures are
 compared byte for byte against the agent's own implementation.
 
-**The Home Assistant layer on top has never been loaded into Home Assistant.**
-Every file compiles, the translation keys all resolve, and the shapes follow
-current integration practice, but nobody has added this through the UI and
-watched the entities appear. Treat the first install as the test, and please
-[open an issue](https://github.com/Shamilimanuel/PCRemote/issues) with what
-breaks.
+The Home Assistant layer has fourteen tests that start Home Assistant
+in-process, add the integration through its own config flow, and assert on the
+entities that come out. They run on every push:
+
+```bash
+pip install pytest-homeassistant-custom-component
+cd integrations/home-assistant && pytest -q
+```
+
+**On Linux or macOS.** Home Assistant's test harness does not run on Windows:
+it needs two Unix-only modules, and it lets Unix sockets through its network
+guard "because it's needed by asyncio" — where Windows asyncio builds its
+self-pipe from a local TCP pair, which the guard catches before a single test
+runs. CI does it on Ubuntu.
+
+What they cover is the part reading the code cannot settle: that the entities
+appear at all, that the BIOS button goes unavailable when the machine says it
+cannot do it, that a machine at its sign-in screen reads as awake while every
+control but Wake greys out, that readings go unavailable rather than zero when
+it is off, that pressing Lock sends `lock`, that Wake reaches the subnet
+broadcast and still does after the machine has gone away, and that a wrong
+pairing code is told apart from an unreachable one.
+
+**Still worth doing: installing it for real.** The agent is mocked in those
+tests, so nothing has yet gone end to end from a Home Assistant button to a
+machine actually locking. If you are the first to try it, please
+[open an issue](https://github.com/Shamilimanuel/PCRemote/issues) with anything
+that breaks.

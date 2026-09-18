@@ -49,6 +49,8 @@ people installing "the same" version got different apps.*
 ```bash
 cd front-end && npx tsx src/lib/signing.test.ts     # phone vs agent signing   47
 cd front-end && npx tsx src/lib/releaseNotes.test.ts # release body parsing     26
+cd integrations/home-assistant && pytest -q          # the HA integration      14
+                                                     # (Linux/macOS only)
 cd front-end && npx tsx src/lib/wakeRules.test.ts   # wake state machine       26
 node tools/check-websign.js                         # browser crypto vs node   58
 cd front-end && npx tsc --noEmit                    # types + i18n completeness
@@ -171,12 +173,13 @@ No test runner is wired up on purpose — these need no install and no config.
   readings. Its client is verified against the agent; **the Home Assistant
   layer above it has never been loaded into Home Assistant** — see its README.
 
-- [ ] **Try the Home Assistant integration in Home Assistant** ← recommended
-  Needs Home Assistant running on something that stays on — not the PC being
-  woken, since that is off when it matters. Everything compiles and the client
-  is tested against a real agent, but nobody has added it through the UI and
-  watched the entities appear. This is also the step that unlocks "Hey Google,
-  lock the office PC"; the README explains that chain.
+- [ ] **Install the Home Assistant integration for real**
+  Much lower risk than it was: fourteen tests now load it into real Home
+  Assistant and check the entities, so what is left is the end-to-end path —
+  a button in Home Assistant actually locking a machine, with the agent no
+  longer mocked. Needs Home Assistant on something that stays on, *not* the PC
+  being woken. This is also what unlocks "Hey Google, lock the office PC"; the
+  integration's README explains that chain.
 
 - [ ] **Rewrite the agent in Go**
   The whole agent is ~1,700 lines. Go gives one ~8–12 MB binary with no
