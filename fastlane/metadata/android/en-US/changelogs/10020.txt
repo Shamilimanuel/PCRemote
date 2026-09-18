@@ -1,0 +1,5 @@
+Only one sound plays at a time now.
+
+Pressing a button played its own sound, and then the success sound arrived on
+top of it — on a home network an action finishes in a fraction of a second, so
+the two overlapped. Press Lock and you heard both at once.

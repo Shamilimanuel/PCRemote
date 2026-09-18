@@ -29,6 +29,16 @@ const players = new Map<Voice, AudioPlayer>();
 let enabled = true;
 let configured = false;
 
+/**
+ * What is sounding right now, so the next sound can silence it.
+ *
+ * These are confirmations, not music, and only one should ever be audible. On a
+ * home network an action finishes in a fraction of a second, so the result tone
+ * used to start while the button's own tone was still going -- press Lock and
+ * you heard the lock sound and the success sound on top of each other.
+ */
+let sounding: Voice | null = null;
+
 export function setSoundEnabled(on: boolean) {
   enabled = on;
 }
@@ -62,6 +72,19 @@ export function play(voice: Voice) {
   if (!enabled) return;
   void configure();
 
+  // Synchronously, before anything awaits: two calls in the same tick must not
+  // both end up audible, and pause() is the one part of this that is immediate.
+  // Rewinding is left to whenever that voice next plays, which always seeks
+  // to 0 first anyway.
+  if (sounding && sounding !== voice) {
+    try {
+      players.get(sounding)?.pause();
+    } catch {
+      // Already stopped, or never started. Either way there is nothing to undo.
+    }
+  }
+  sounding = voice;
+
   void (async () => {
     try {
       let player = players.get(voice);
@@ -92,4 +115,5 @@ export function releaseSounds() {
     }
   }
   players.clear();
+  sounding = null;
 }

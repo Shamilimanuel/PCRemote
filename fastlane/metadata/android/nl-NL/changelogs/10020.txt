@@ -1,0 +1,5 @@
+Er speelt nu nog maar één geluid tegelijk.
+
+Een knop speelde zijn eigen geluid, en daar kwam het geluid voor "gelukt"
+overheen — op een thuisnetwerk is een actie in een fractie van een seconde
+klaar, dus die twee liepen door elkaar. Bij Vergrendelen hoorde je ze samen.
