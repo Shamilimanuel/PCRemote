@@ -1,4 +1,5 @@
 import * as Application from 'expo-application';
+import { releaseNotes } from './releaseNotes';
 
 const RELEASES_API = 'https://api.github.com/repos/Shamilimanuel/PCRemote/releases/latest';
 
@@ -6,6 +7,8 @@ export type UpdateInfo = {
   version: string;
   downloadUrl: string;
   releaseUrl: string;
+  /** What changed, in plain English. Empty for releases written before this. */
+  notes: string;
 };
 
 /**
@@ -77,6 +80,7 @@ export async function checkForUpdateDetailed(): Promise<UpdateCheck> {
         version: release.tag_name,
         downloadUrl: apk.browser_download_url,
         releaseUrl: release.html_url,
+        notes: releaseNotes(release.body),
       },
     };
   } catch (err) {

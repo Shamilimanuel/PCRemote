@@ -1,7 +1,7 @@
 # Reveille — status and checklist
 
 Working notes, kept so a new chat can pick up without re-deriving anything.
-Last updated: **18 September 2026**, at **v1.0.17**.
+Last updated: **18 September 2026**, at **v1.0.18**.
 
 **How we work this list:** items are worked top to bottom. Pick one, say the
 name, and it gets built. When it is done it gets checked off here and we move
@@ -15,7 +15,7 @@ my call.
 
 | | |
 |---|---|
-| Version | **1.0.17** (versionCode 10017) |
+| Version | **1.0.18** (versionCode 10018) |
 | Repo | `github.com/Shamilimanuel/PCRemote` (public, MIT) |
 | Install (Windows) | `irm github.com/Shamilimanuel/PCRemote/raw/main/setup.ps1 \| iex` |
 | Install (macOS/Linux) | `curl -fsSL github.com/Shamilimanuel/PCRemote/raw/main/setup.sh \| bash` |
@@ -33,6 +33,7 @@ the hand-set source of truth; CI derives `versionCode` from it. The keystore in
 
 ```bash
 cd front-end && npx tsx src/lib/signing.test.ts     # phone vs agent signing   47
+cd front-end && npx tsx src/lib/releaseNotes.test.ts # release body parsing     26
 cd front-end && npx tsx src/lib/wakeRules.test.ts   # wake state machine       26
 node tools/check-websign.js                         # browser crypto vs node   58
 cd front-end && npx tsc --noEmit                    # types + i18n completeness
@@ -129,11 +130,16 @@ No test runner is wired up on purpose — these need no install and no config.
   *Google Play is $25 one-time but needs an 18+ Google Payments account and a
   14-day closed test with 12+ testers first. Worth doing eventually, not first.*
 
-- [ ] **Show the changelog in the update banner**
-  Small, and it connects the two halves. The banner says a version is available
-  and offers Get it, but never says what changed — while the release body now
-  leads with plain-English notes from `fastlane/.../changelogs/`. The updater
-  already fetches that release and throws the text away. Roughly an hour.
+- [x] **Show the changelog in the update banner** *(18 Sep, v1.0.18)*
+  The banner offered a version number and a button, which asks someone to
+  install something because a number went up. It now shows what changed, with
+  longer notes collapsed behind More. The text was in the same reply the whole
+  time and was being discarded.
+  Parsing it lives in `lib/releaseNotes.ts`, importing nothing so it can be
+  tested — 26 checks, including that releases from before changelogs existed
+  produce nothing rather than a checksum where the explanation should be, and
+  that the changelog files' hard wrapping is undone (they wrap near 78 columns,
+  which reads ragged on a phone, but bullet lists keep their breaks).
 
 - [ ] **Document the agent's REST API, then a Home Assistant integration**
   The cheapest large win available. The authenticated HTTP API already exists;

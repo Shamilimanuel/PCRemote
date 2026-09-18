@@ -196,6 +196,8 @@ export const en = {
   updateBannerTitle: (v: string) => `Reveille ${v} is available`,
   updateBannerSub: 'Installs over this one — your PCs stay saved.',
   getIt: 'Get it',
+  showMore: 'More',
+  showLess: 'Less',
 
   // --- errors ---
   errNoAnswerTitle: 'No answer',
@@ -422,6 +424,8 @@ export const nl: Strings = {
   updateBannerTitle: (v: string) => `Reveille ${v} is beschikbaar`,
   updateBannerSub: 'Installeert over deze heen — je pc’s blijven bewaard.',
   getIt: 'Ophalen',
+  showMore: 'Meer',
+  showLess: 'Minder',
 
   errNoAnswerTitle: 'Geen antwoord',
   errNoAnswerReach:
