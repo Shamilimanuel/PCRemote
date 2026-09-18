@@ -1,0 +1,9 @@
+Your pairing secret no longer travels over the network. Each request is signed
+with it instead, so anyone watching learns nothing they can reuse, and a
+captured request cannot be replayed. Your computer signs its replies too, so
+the app can tell it apart from anything else answering.
+
+Requests from outside your local network are now refused outright.
+
+The pairing code can be replaced from the setup command, and on the phone the
+secret now lives in the Android keystore.

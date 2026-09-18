@@ -55,6 +55,10 @@ jobs:
             cfg.expo.ios.buildNumber = String(code);
             fs.writeFileSync('app.json', JSON.stringify(cfg, null, 2) + '\n');
             fs.appendFileSync(process.env.GITHUB_ENV, 'APP_VERSION=' + v + '\n');
+            // Exported too, because the release step looks up the changelog by
+            // version code. Without it the path resolved to '.../changelogs/.txt'
+            // and quietly matched nothing at all.
+            fs.appendFileSync(process.env.GITHUB_ENV, 'ANDROID_VERSION_CODE=' + code + '\n');
             console.log('version ' + v + '  versionCode ' + code);
           "
 
@@ -123,7 +127,15 @@ jobs:
           SIZE=$(( $(stat -c%s "$APK") / 1048576 ))
           SUM=$(sha256sum "$APK" | cut -d' ' -f1)
 
+          # The same text the app stores show, so a release note and a store
+          # listing cannot drift apart -- and so writing it once is enough.
+          CHANGELOG="fastlane/metadata/android/en-US/changelogs/${ANDROID_VERSION_CODE}.txt"
+
           {
+            if [ -f "$CHANGELOG" ]; then
+              cat "$CHANGELOG"
+              echo
+            fi
             echo "Android APK built from \`${GITHUB_SHA::7}\`."
             echo
             echo "Download **reveille.apk** below and open it on your phone to install."

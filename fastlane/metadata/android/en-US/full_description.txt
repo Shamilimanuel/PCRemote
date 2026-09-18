@@ -1,0 +1,40 @@
+Reveille turns your phone into the power button for your computer.
+
+Named after the bugle call that wakes a barracks at dawn, it does one thing and
+tries to do it properly: start, shut down, restart, sleep and lock your Windows,
+macOS or Linux machine over your own Wi-Fi.
+
+<b>Setting it up</b>
+
+One line pasted into a terminal on the computer. It installs what it needs, sets
+itself to start when you log in, and shows a QR code for the phone to scan. No
+account, no sign-up, and no administrator rights for the normal install.
+
+<b>What it can do</b>
+
+* Wake a computer that is fully switched off, using Wake-on-LAN
+* Shut down, restart, sleep and lock
+* Shut down or restart on a timer, and cancel it again
+* Reboot straight into the BIOS or firmware screen (Windows only, and only if
+  you say yes when it asks)
+* Show what the machine is doing: CPU, memory and disk
+* Tell you when the machine is still at its sign-in screen, rather than
+  pretending it is offline
+
+<b>It stays on your network</b>
+
+There is no cloud service, no account and no telemetry. Your phone talks
+straight to your computer over your own Wi-Fi, and nothing is sent anywhere
+else. Requests from outside your local network are refused outright.
+
+The pairing secret never crosses the network either: each request is signed with
+it, so anyone watching the traffic learns nothing they could reuse. Signatures
+cannot be replayed, and the computer signs its replies so your phone can tell it
+apart from anything else answering.
+
+<b>Open source</b>
+
+MIT licensed, no adverts, no tracking, no analytics libraries of any kind. The
+whole thing is readable in an afternoon:
+
+https://github.com/Shamilimanuel/PCRemote

@@ -1,7 +1,7 @@
 # Reveille — status and checklist
 
 Working notes, kept so a new chat can pick up without re-deriving anything.
-Last updated: **17 September 2026**, at **v1.0.17**.
+Last updated: **18 September 2026**, at **v1.0.17**.
 
 **How we work this list:** items are worked top to bottom. Pick one, say the
 name, and it gets built. When it is done it gets checked off here and we move
@@ -97,13 +97,30 @@ No test runner is wired up on purpose — these need no install and no config.
 
 ## Next up
 
-- [ ] **Distribution: Obtainium, then F-Droid** ← recommended
-  Nothing about the app is feature-limited; it is reach-limited. Obtainium
-  installs and auto-updates straight from GitHub Releases — zero work, works
-  today, and means friends get every release without being told. F-Droid is the
-  real goal: free, no age requirement, and Reveille is almost the platonic
-  F-Droid app (MIT, no trackers, no ads, no cloud). Needs a metadata PR and a
-  reproducible build.
+- [x] **Distribution, part one: Obtainium and the store listing** *(18 Sep)*
+  Obtainium needed nothing built — it reads GitHub releases, and `reveille.apk`
+  has been the filename on every release, so it already worked. It is now
+  documented in the README as the way to get updates, which is the thing to
+  send a friend.
+  Store metadata written in the Fastlane layout that F-Droid and IzzyOnDroid
+  both read (`fastlane/metadata/`), in English and Dutch, and the release
+  workflow now puts the changelog at the top of the GitHub release so a release
+  note and a store listing cannot drift apart.
+  Confirmed along the way: **no trackers, no analytics, no Google Play Services
+  anywhere in the dependency tree.** That is what makes the rest possible.
+
+- [ ] **Distribution, part two: submit to IzzyOnDroid** ← recommended
+  **Blocked on you, not on code:** it needs two to eight screenshots taken on a
+  real phone, and I have no device. `fastlane/README.md` lists which four shots
+  are worth having and warns about keeping real hostnames, addresses and the
+  pairing token out of them. Once they are in
+  `fastlane/metadata/android/en-US/images/phoneScreenshots/`, the submission is
+  one issue at <https://gitlab.com/IzzyOnDroid/repo/-/issues>.
+  IzzyOnDroid takes the prebuilt APK, appears inside any F-Droid client, costs
+  nothing and has no age requirement — it is the realistic version of "get on
+  F-Droid". Main F-Droid builds from source on their own infrastructure, which
+  for an Expo app is a much larger undertaking; worth attempting only after
+  IzzyOnDroid is live.
   *Google Play is $25 one-time but needs an 18+ Google Payments account and a
   14-day closed test with 12+ testers first. Worth doing eventually, not first.*
 
@@ -200,3 +217,4 @@ No test runner is wired up on purpose — these need no install and no config.
 | Token storage + migration | `front-end/src/lib/storage.ts` |
 | App icon generator | `tools/make-icon.py` |
 | Security write-up | `README.md`, "Security notes" |
+| Store listing + changelogs | `fastlane/` (its README explains the layout) |
