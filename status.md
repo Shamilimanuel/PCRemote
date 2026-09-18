@@ -115,20 +115,8 @@ No test runner is wired up on purpose — these need no install and no config.
 
 ## Next up
 
-- [x] **Distribution, part one: the store listing** *(18 Sep)*
-  **Correction to an earlier note in this file:** in-app updates already work
-  and have for a while — the app checks the releases page when opened, shows a
-  banner and a Get it button, and installs the new APK. Obtainium was written
-  up as if it fixed that. It does not; it is a minor convenience (it can notice
-  a release without Reveille being opened) and the README now says so honestly.
-  It does work out of the box, since `reveille.apk` is the filename on every
-  release.
-  Store metadata written in the Fastlane layout that F-Droid and IzzyOnDroid
-  both read (`fastlane/metadata/`), in English and Dutch, and the release
-  workflow now puts the changelog at the top of the GitHub release so a release
-  note and a store listing cannot drift apart.
-  Confirmed along the way: **no trackers, no analytics, no Google Play Services
-  anywhere in the dependency tree.** That is what makes the rest possible.
+Open items only, in the order I would do them. Anything finished has moved to
+**Recently done** below.
 
 - [ ] **Distribution, part two: submit to IzzyOnDroid** ← recommended
   **Blocked on you, not on code:** it needs two to eight screenshots taken on a
@@ -147,6 +135,61 @@ No test runner is wired up on purpose — these need no install and no config.
   *Google Play is $25 one-time but needs an 18+ Google Payments account and a
   14-day closed test with 12+ testers first. Worth doing eventually, not first.*
 
+
+- [ ] **Install the Home Assistant integration for real**
+  Much lower risk than it was: fourteen tests now load it into real Home
+  Assistant and check the entities, so what is left is the end-to-end path —
+  a button in Home Assistant actually locking a machine, with the agent no
+  longer mocked. Needs Home Assistant on something that stays on, *not* the PC
+  being woken. This is also what unlocks "Hey Google, lock the office PC"; the
+  integration's README explains that chain.
+
+
+- [ ] **Rewrite the agent in Go**
+  The whole agent is ~1,700 lines. Go gives one ~8–12 MB binary with no
+  runtime: no Node install, no npm, no execution-policy failure mode, and 97
+  dependencies become about 2. `setup.ps1` would lose more than half its length
+  and most of its ways to fail. CI cross-compiles all five targets from one
+  job. `web/` embeds unchanged via `go:embed`.
+  *Cost: it is a rewrite of something that works, and everything Windows-side
+  needs re-testing. Do it after the protocol has settled, not before.*
+
+
+- [ ] **Test the macOS and Linux agents on real hardware**
+  They are written, they parse, the commands are built from documented
+  behaviour — and nobody has ever run them. Until someone does, treat them as
+  unproven rather than shipped.
+
+
+- [ ] **Remove the Bearer token fallback**
+  Kept for one release so updating the app or the agent first does not lock
+  anyone out. `REVEILLE_REQUIRE_SIGNING=1` already turns it off. Flip the
+  default once signing has been out long enough that nobody is on an older app
+  — realistically a few releases.
+
+---
+
+## Recently done
+
+Kept in date order, newest first, so it is obvious what changed lately without
+reading the whole of **Done**.
+
+- [x] **Distribution, part one: the store listing** *(18 Sep)*
+  **Correction to an earlier note in this file:** in-app updates already work
+  and have for a while — the app checks the releases page when opened, shows a
+  banner and a Get it button, and installs the new APK. Obtainium was written
+  up as if it fixed that. It does not; it is a minor convenience (it can notice
+  a release without Reveille being opened) and the README now says so honestly.
+  It does work out of the box, since `reveille.apk` is the filename on every
+  release.
+  Store metadata written in the Fastlane layout that F-Droid and IzzyOnDroid
+  both read (`fastlane/metadata/`), in English and Dutch, and the release
+  workflow now puts the changelog at the top of the GitHub release so a release
+  note and a store listing cannot drift apart.
+  Confirmed along the way: **no trackers, no analytics, no Google Play Services
+  anywhere in the dependency tree.** That is what makes the rest possible.
+
+
 - [x] **Show the changelog in the update banner** *(18 Sep, v1.0.18)*
   The banner offered a version number and a button, which asks someone to
   install something because a number went up. It now shows what changed, with
@@ -157,6 +200,7 @@ No test runner is wired up on purpose — these need no install and no config.
   produce nothing rather than a checksum where the explanation should be, and
   that the changelog files' hard wrapping is undone (they wrap near 78 columns,
   which reads ragged on a phone, but bullet lists keep their breaks).
+
 
 - [x] **Document the agent's REST API, and write the Home Assistant integration** *(18 Sep)*
   `docs/api.md` covers every endpoint, both authentication schemes, the
@@ -173,35 +217,22 @@ No test runner is wired up on purpose — these need no install and no config.
   readings. Its client is verified against the agent; **the Home Assistant
   layer above it has never been loaded into Home Assistant** — see its README.
 
-- [ ] **Install the Home Assistant integration for real**
-  Much lower risk than it was: fourteen tests now load it into real Home
-  Assistant and check the entities, so what is left is the end-to-end path —
-  a button in Home Assistant actually locking a machine, with the agent no
-  longer mocked. Needs Home Assistant on something that stays on, *not* the PC
-  being woken. This is also what unlocks "Hey Google, lock the office PC"; the
-  integration's README explains that chain.
 
-- [ ] **Rewrite the agent in Go**
-  The whole agent is ~1,700 lines. Go gives one ~8–12 MB binary with no
-  runtime: no Node install, no npm, no execution-policy failure mode, and 97
-  dependencies become about 2. `setup.ps1` would lose more than half its length
-  and most of its ways to fail. CI cross-compiles all five targets from one
-  job. `web/` embeds unchanged via `go:embed`.
-  *Cost: it is a rewrite of something that works, and everything Windows-side
-  needs re-testing. Do it after the protocol has settled, not before.*
+- [x] **Release in batches, not one per change** *(18 Sep)*
+  CI used to replace the APK on an existing release whenever the version had
+  not moved, which was fine when every push was a release and wrong once work
+  started landing in batches — the download behind a version number would have
+  quietly changed under people who had already installed it. A push whose
+  version already has a release now builds, proves the app compiles, and
+  publishes nothing.
 
-- [ ] **Test the macOS and Linux agents on real hardware**
-  They are written, they parse, the commands are built from documented
-  behaviour — and nobody has ever run them. Until someone does, treat them as
-  unproven rather than shipped.
-
-- [ ] **Remove the Bearer token fallback**
-  Kept for one release so updating the app or the agent first does not lock
-  anyone out. `REVEILLE_REQUIRE_SIGNING=1` already turns it off. Flip the
-  default once signing has been out long enough that nobody is on an older app
-  — realistically a few releases.
-
----
+- [x] **Button sounds** *(18 Sep, v1.0.19 and v1.0.20)*
+  Two separate faults. They were suppressed entirely whenever the phone was on
+  vibrate — `playsInSilentMode: false` means something different on Android to
+  what it means on iOS, and the app's own Sound switch sat there promising
+  otherwise. And the press sound and the result sound overlapped, because on a
+  home network an action comes back in about 150ms. Only one plays at a time
+  now.
 
 ## Ideas, parked
 
