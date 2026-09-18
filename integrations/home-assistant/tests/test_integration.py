@@ -17,8 +17,6 @@ agent; what is unproven here is the Home Assistant layer on top.
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -27,10 +25,12 @@ from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "custom_components"))
-
-from reveille.api import ReveilleAuthError, ReveilleError  # noqa: E402
-from reveille.const import CONF_MAC, CONF_TOKEN, DOMAIN  # noqa: E402
+# Imported by the same name Home Assistant uses. That matters for more than
+# tidiness: patching "reveille.api" would patch a different module object from
+# the "custom_components.reveille.api" Home Assistant actually loaded, and the
+# mocks would silently never apply.
+from custom_components.reveille.api import ReveilleAuthError, ReveilleError  # noqa: E402
+from custom_components.reveille.const import CONF_MAC, CONF_TOKEN, DOMAIN  # noqa: E402
 
 TOKEN = "a3f1c09d4b7e2815a3f1c09d4b7e2815a3f1c09d4b7e2815"
 
@@ -97,8 +97,8 @@ async def setup_with(hass: HomeAssistant, *, health=HEALTH, presence=None, error
     )
 
     with (
-        patch("reveille.api.ReveilleClient.health", health_mock),
-        patch("reveille.api.ReveilleClient.presence", presence_mock),
+        patch("custom_components.reveille.api.ReveilleClient.health", health_mock),
+        patch("custom_components.reveille.api.ReveilleClient.presence", presence_mock),
     ):
         await hass.config_entries.async_setup(config_entry.entry_id)
         await hass.async_block_till_done()
@@ -180,8 +180,8 @@ async def test_off(hass: HomeAssistant) -> None:
 async def test_pressing_lock_sends_lock(hass: HomeAssistant) -> None:
     await setup_with(hass)
 
-    with patch("reveille.api.ReveilleClient.action", AsyncMock(return_value={})) as action:
-        with patch("reveille.api.ReveilleClient.health", AsyncMock(return_value=HEALTH)):
+    with patch("custom_components.reveille.api.ReveilleClient.action", AsyncMock(return_value={})) as action:
+        with patch("custom_components.reveille.api.ReveilleClient.health", AsyncMock(return_value=HEALTH)):
             await hass.services.async_call(
                 "button", "press", {"entity_id": "button.office_pc_lock"}, blocking=True
             )
@@ -194,7 +194,7 @@ async def test_pressing_lock_sends_lock(hass: HomeAssistant) -> None:
 async def test_pressing_wake_sends_a_magic_packet(hass: HomeAssistant) -> None:
     await setup_with(hass)
 
-    with patch("reveille.button.wake_on_lan") as wake:
+    with patch("custom_components.reveille.button.wake_on_lan") as wake:
         await hass.services.async_call(
             "button", "press", {"entity_id": "button.office_pc_wake"}, blocking=True
         )
@@ -219,14 +219,14 @@ async def test_wake_remembers_the_broadcast_after_the_machine_goes_away(
     coordinator = hass.data[DOMAIN][config_entry.entry_id]
 
     with patch(
-        "reveille.api.ReveilleClient.health", AsyncMock(side_effect=ReveilleError("gone"))
+        "custom_components.reveille.api.ReveilleClient.health", AsyncMock(side_effect=ReveilleError("gone"))
     ):
         await coordinator.async_refresh()
         await hass.async_block_till_done()
 
     assert hass.states.get("binary_sensor.office_pc_awake").state == STATE_OFF
 
-    with patch("reveille.button.wake_on_lan") as wake:
+    with patch("custom_components.reveille.button.wake_on_lan") as wake:
         await hass.services.async_call(
             "button", "press", {"entity_id": "button.office_pc_wake"}, blocking=True
         )
@@ -241,7 +241,7 @@ async def test_adding_it(hass: HomeAssistant) -> None:
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
     assert result["type"] == FlowResultType.FORM
 
-    with patch("reveille.api.ReveilleClient.health", AsyncMock(return_value=HEALTH)):
+    with patch("custom_components.reveille.api.ReveilleClient.health", AsyncMock(return_value=HEALTH)):
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"],
             {CONF_HOST: "10.0.0.25", CONF_PORT: 5533, CONF_TOKEN: TOKEN, CONF_MAC: "", "name": ""},
@@ -263,7 +263,7 @@ async def test_a_wrong_code_is_told_apart_from_an_unreachable_machine(
         (ReveilleError("no route"), "cannot_connect"),
     ):
         result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
-        with patch("reveille.api.ReveilleClient.health", AsyncMock(side_effect=error)):
+        with patch("custom_components.reveille.api.ReveilleClient.health", AsyncMock(side_effect=error)):
             result = await hass.config_entries.flow.async_configure(
                 result["flow_id"],
                 {CONF_HOST: "10.0.0.25", CONF_PORT: 5533, CONF_TOKEN: TOKEN, CONF_MAC: "", "name": ""},
@@ -286,7 +286,7 @@ async def test_the_same_machine_cannot_be_added_twice(hass: HomeAssistant) -> No
     await setup_with(hass)
 
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
-    with patch("reveille.api.ReveilleClient.health", AsyncMock(return_value=HEALTH)):
+    with patch("custom_components.reveille.api.ReveilleClient.health", AsyncMock(return_value=HEALTH)):
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"],
             {CONF_HOST: "10.0.0.25", CONF_PORT: 5533, CONF_TOKEN: TOKEN, CONF_MAC: "", "name": ""},
