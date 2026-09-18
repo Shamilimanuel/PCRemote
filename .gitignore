@@ -17,3 +17,7 @@ secrets/
 # Generated native projects (rebuilt from app.json on every build)
 front-end/android/
 front-end/ios/
+
+# Python bytecode, from the Home Assistant integration.
+__pycache__/
+*.py[cod]

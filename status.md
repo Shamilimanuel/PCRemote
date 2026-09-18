@@ -156,11 +156,27 @@ No test runner is wired up on purpose — these need no install and no config.
   that the changelog files' hard wrapping is undone (they wrap near 78 columns,
   which reads ragged on a phone, but bullet lists keep their breaks).
 
-- [ ] **Document the agent's REST API, then a Home Assistant integration**
-  The cheapest large win available. The authenticated HTTP API already exists;
-  writing it down and adding a ~50-line HA integration puts Reveille in front
-  of exactly the people who want it. Note this means deciding whether HA
-  clients sign requests or use the bearer path.
+- [x] **Document the agent's REST API, and write the Home Assistant integration** *(18 Sep)*
+  `docs/api.md` covers every endpoint, both authentication schemes, the
+  lock-screen responder, and every error the agent can return — each response
+  in it captured from a running agent rather than described from memory, and
+  the worked Python client extracted from the page and run verbatim.
+  **The open question is settled: Home Assistant signs.** Anything that can run
+  ten lines of Python has no excuse for sending the token, so bearer stays only
+  for callers that genuinely cannot compute an HMAC — a curl line, a Tasker
+  task — and is documented as the weaker choice rather than an equal one. That
+  keeps the door open to removing it.
+  The integration is in `integrations/home-assistant/`: buttons, an awake
+  sensor that knows the sign-in screen from being off, and CPU/memory/disk
+  readings. Its client is verified against the agent; **the Home Assistant
+  layer above it has never been loaded into Home Assistant** — see its README.
+
+- [ ] **Try the Home Assistant integration in Home Assistant** ← recommended
+  Needs Home Assistant running on something that stays on — not the PC being
+  woken, since that is off when it matters. Everything compiles and the client
+  is tested against a real agent, but nobody has added it through the UI and
+  watched the entities appear. This is also the step that unlocks "Hey Google,
+  lock the office PC"; the README explains that chain.
 
 - [ ] **Rewrite the agent in Go**
   The whole agent is ~1,700 lines. Go gives one ~8–12 MB binary with no
@@ -250,3 +266,5 @@ No test runner is wired up on purpose — these need no install and no config.
 | App icon generator | `tools/make-icon.py` |
 | Security write-up | `README.md`, "Security notes" |
 | Store listing + changelogs | `fastlane/` (its README explains the layout) |
+| The agent's HTTP API | `docs/api.md` |
+| Home Assistant integration | `integrations/home-assistant/` |
