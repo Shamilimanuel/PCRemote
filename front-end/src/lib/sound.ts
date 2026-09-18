@@ -37,11 +37,20 @@ async function configure() {
   if (configured) return;
   configured = true;
   try {
-    // Mix with whatever else is playing, and respect the silent switch --
-    // a button click has no business interrupting someone's music.
     await setAudioModeAsync({
-      playsInSilentMode: false,
+      // This was false, meaning to respect the iOS silent switch. On Android it
+      // means something else entirely: "playback is suppressed when the ringer
+      // mode is silent or vibrate". So anyone whose phone was on vibrate -- most
+      // people, most of the time -- got no button sounds at all, while the app's
+      // own Sound setting sat there switched on, promising otherwise.
+      //
+      // These are not notifications. They are feedback for a button the person
+      // just deliberately pressed, and the switch in Settings is the control for
+      // them. That switch should be the only thing that silences them.
+      playsInSilentMode: true,
       shouldPlayInBackground: false,
+      // The documented choice for UI feedback: no audio focus is requested, so
+      // a tap never interrupts or ducks someone's music.
       interruptionMode: 'mixWithOthers',
     });
   } catch {
@@ -53,18 +62,24 @@ export function play(voice: Voice) {
   if (!enabled) return;
   void configure();
 
-  try {
-    let player = players.get(voice);
-    if (!player) {
-      player = createAudioPlayer(FILES[voice]);
-      players.set(voice, player);
+  void (async () => {
+    try {
+      let player = players.get(voice);
+      if (!player) {
+        player = createAudioPlayer(FILES[voice]);
+        players.set(voice, player);
+      }
+      // seekTo(0) rather than a new player, so rapid taps retrigger cleanly --
+      // but awaited. It returns a promise, and play() used to be called while
+      // the rewind was still in flight, which leaves the player sitting at the
+      // end of the clip it just finished. Pressing the same button twice could
+      // therefore produce silence the second time.
+      await player.seekTo(0);
+      player.play();
+    } catch {
+      // Sound is a nicety. Never let it break the button.
     }
-    // seekTo(0) rather than a new player, so rapid taps retrigger cleanly.
-    void player.seekTo(0);
-    player.play();
-  } catch {
-    // Sound is a nicety. Never let it break the button.
-  }
+  })();
 }
 
 /** Frees the native players. Called when the app unmounts. */

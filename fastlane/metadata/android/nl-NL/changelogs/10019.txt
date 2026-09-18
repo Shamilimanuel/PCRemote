@@ -1,0 +1,7 @@
+Knopgeluiden werken nu ook als je telefoon op trillen of stil staat.
+
+Android onderdrukte ze zodra de beltoon uit stond, wat voor de meeste mensen
+bijna altijd zo is, terwijl de geluidsschakelaar in Instellingen gewoon aan
+stond. Die schakelaar is nu het enige dat ze uitzet.
+
+Twee keer snel op dezelfde knop drukken kon ook het tweede geluid verliezen.
