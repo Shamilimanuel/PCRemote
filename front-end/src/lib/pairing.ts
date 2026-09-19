@@ -11,6 +11,17 @@ import { Device } from '../types/device';
 
 const SUPPORTED_VERSION = 1;
 
+/**
+ * The compact form the agent prints now: `R1*ip*port*TOKEN*MAC*name`.
+ *
+ * JSON cost about fifty characters in keys and quotes, which pushed the printed
+ * code from 37 modules square to 49 -- a third bigger on screen for nothing a
+ * reader ever sees. The JSON form is still accepted, because an agent that has
+ * not been updated yet still prints it and nobody should have to update both
+ * halves in one go to pair a machine.
+ */
+const COMPACT_PREFIX = 'R1';
+
 export type PairingResult =
   | { ok: true; device: Omit<Device, 'id'> }
   | { ok: false; reason: string };
@@ -28,7 +39,37 @@ function isMac(value: unknown): value is string {
   return typeof value === 'string' && value.replace(/[^0-9a-fA-F]/g, '').length === 12;
 }
 
+function parseCompact(raw: string): PairingResult | null {
+  const parts = raw.trim().split('*');
+  if (parts[0] !== COMPACT_PREFIX) return null;
+
+  // Past the prefix it is positional, so a short one is malformed rather than
+  // partly usable. The name may itself contain nothing odd, but it is last so
+  // anything after the MAC is the name.
+  if (parts.length < 5) return { ok: false, reason: 'That pairing code is incomplete.' };
+
+  const [, ip, port, token, mac, ...rest] = parts;
+
+  // The agent uppercases the token so the whole string fits QR's alphanumeric
+  // mode, which is what makes the code smaller. Every token it generates is
+  // lowercase hex, so lowering it back is exact -- and it has to be exact,
+  // because the token is an HMAC key and the bytes are what sign a request.
+  // Anything that is not hex is left alone rather than quietly altered.
+  const restored = /^[0-9a-fA-F]+$/.test(token) ? token.toLowerCase() : token;
+
+  return finish({
+    ip,
+    port: Number(port),
+    token: restored,
+    mac,
+    name: rest.join('*'),
+  });
+}
+
 export function parsePairingPayload(raw: string): PairingResult {
+  const compact = parseCompact(raw);
+  if (compact) return compact;
+
   let data: any;
   try {
     data = JSON.parse(raw);
@@ -50,6 +91,22 @@ export function parsePairingPayload(raw: string): PairingResult {
     };
   }
 
+  return finish(data);
+}
+
+/**
+ * The checks both formats go through.
+ *
+ * Whatever produced these values, they came off a camera pointed at the world,
+ * so every one is checked before it can reach storage.
+ */
+function finish(data: {
+  ip: unknown;
+  port: unknown;
+  token: unknown;
+  mac: unknown;
+  name: unknown;
+}): PairingResult {
   if (!isIpv4(data.ip)) return { ok: false, reason: 'The code has no usable address.' };
   if (!isMac(data.mac)) return { ok: false, reason: 'The code has no usable MAC address.' };
   if (typeof data.token !== 'string' || data.token.length < 16) {

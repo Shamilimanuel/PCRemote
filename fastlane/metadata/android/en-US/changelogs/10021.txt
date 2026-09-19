@@ -1,0 +1,5 @@
+The pairing code your PC prints is now a third smaller on screen, and drawn in
+the app's own dusk blue instead of black and white.
+
+Nothing about scanning changes — the app reads both the new short code and the
+old one, so it does not matter which half you update first.

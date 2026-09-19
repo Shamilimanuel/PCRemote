@@ -1,0 +1,5 @@
+De koppelcode die je pc laat zien is nu een derde kleiner op het scherm, en
+getekend in het blauw van de app in plaats van zwart-wit.
+
+Aan scannen verandert niets — de app leest zowel de nieuwe korte code als de
+oude, dus het maakt niet uit welke helft je eerst bijwerkt.
