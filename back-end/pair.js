@@ -16,7 +16,8 @@ const { exec, execSync } = require('child_process');
 const QRCode = require('qrcode');
 
 const { loadOrCreateConfig, getPrimaryNetworkInfo } = require('./src/config');
-const { buildPairingPayload } = require('./src/pairing');
+const { buildPairingPayload, buildCompactPayload } = require('./src/pairing');
+const qrterm = require('./src/qrterm');
 
 const APP_URL = 'https://github.com/Shamilimanuel/PCRemote/releases/latest';
 
@@ -32,42 +33,101 @@ if (process.platform === 'win32') {
 
 // ---------------------------------------------------------------- styling --
 
-// Windows consoles have understood these since Windows 10; if a terminal
-// doesn't, it prints the codes harmlessly rather than breaking the layout.
+/*
+    Dusk, from THEMES in front-end/src/theme/clay.ts, so the screen you pair
+    from and the app you pair with are the same object.
+
+    Everything is 24-bit colour. Windows consoles have understood that since
+    Windows 10, and where a terminal does not, useColour is false and the whole
+    screen falls back to plain text -- which still has every value on it.
+*/
+const DUSK      = [0x5d, 0x8b, 0xff];
+const DUSK_PALE = [0xb9, 0xcc, 0xff];
+const INK       = [0xe8, 0xec, 0xf7];
+const INK2      = [0x98, 0xa2, 0xba];
+const INK3      = [0x64, 0x6e, 0x88];
+const MOSS      = [0x4f, 0xd6, 0x9a];
+const AMBER     = [0xe8, 0xb1, 0x5c];
+
 const useColour = process.stdout.isTTY && !process.env.NO_COLOR;
-const paint = (code) => (s) => (useColour ? `[${code}m${s}[0m` : s);
 
-const cyan = paint('38;5;81');
-const dim = paint('38;5;244');
-const white = paint('97');
-const bold = paint('1');
-const green = paint('38;5;114');
-const amber = paint('38;5;215');
+const ESC = '';
+const RESET = `${ESC}[0m`;
 
-const W = 46;
+function rgb([r, g, b]) {
+  return `${ESC}[38;2;${r};${g};${b}m`;
+}
+
+const tint = (colour) => (text) => (useColour ? rgb(colour) + text + RESET : text);
+
+const dusk = tint(DUSK);
+const ink = tint(INK);
+const dim = tint(INK2);
+const faint = tint(INK3);
+const moss = tint(MOSS);
+const amber = tint(AMBER);
+const bold = (text) => (useColour ? `${ESC}[1m${text}${RESET}` : text);
+
+/** Visible width, ignoring anything the terminal will not print. */
+function visible(text) {
+  return text.replace(new RegExp(`${ESC}\[[0-9;]*m`, 'g'), '').length;
+}
+
+/**
+ * Fades one colour into another across a string.
+ *
+ * The wordmark is the one place worth spending a flourish: it is the first
+ * thing on screen, it takes the same blues as the code below it, and it costs
+ * a few bytes of escape codes rather than a line of height.
+ */
+function gradient(text, from, to) {
+  if (!useColour) return text;
+  const letters = [...text];
+  const last = Math.max(1, letters.length - 1);
+  return letters
+    .map((ch, i) => {
+      if (ch === ' ') return ch;
+      const t = i / last;
+      const mix = from.map((v, k) => Math.round(v + (to[k] - v) * t));
+      return rgb(mix) + ch;
+    })
+    .join('') + RESET;
+}
+
+// Wide enough for the QR, which is 45 columns, with a margin either side.
+const W = 49;
 const pad = '  ';
 
-function rule(left, right, fill) {
-  return dim(pad + left + fill.repeat(W) + right);
+/** A rule with its label sitting in it, so a divider says what it divides. */
+function rule(label) {
+  // W is the card's inner width; a rule spans the card's full extent, which is
+  // two columns wider because of the borders either side.
+  const span = W + 2;
+  if (!label) return faint(pad + '─'.repeat(span));
+  const text = ` ${label} `;
+  return faint(pad + '──' + text + '─'.repeat(Math.max(0, span - text.length - 2)));
 }
 
-function boxLine(text, colour) {
-  const visible = text.replace(/\[[0-9;]*m/g, '');
-  const gap = Math.max(0, W - visible.length - 1);
-  return dim(pad + '│') + ' ' + (colour ? colour(text) : text) + ' '.repeat(gap) + dim('│');
-}
+function header(name) {
+  const mark = gradient('R E V E I L L E', DUSK, DUSK_PALE);
+  const right = 'pair a phone';
 
-function header() {
   console.log('');
-  console.log(rule('╭', '╮', '─'));
-  console.log(boxLine('REVEILLE  ·  pair a phone', bold));
-  console.log(rule('╰', '╯', '─'));
+  console.log(faint(pad + '╭' + '─'.repeat(W) + '╮'));
+
+  const gap = Math.max(1, W - visible(mark) - right.length - 2);
+  console.log(
+    faint(pad + '│') + ' ' + bold(mark) + ' '.repeat(gap) + faint(right) + ' ' + faint('│')
+  );
+
+  const sub = name ? `pairing ${name}` : 'pairing this computer';
+  console.log(faint(pad + '│') + ' ' + dim(sub) + ' '.repeat(Math.max(1, W - sub.length - 1)) + faint('│'));
+  console.log(faint(pad + '╰' + '─'.repeat(W) + '╯'));
   console.log('');
 }
 
 function field(label, value, colour) {
-  const l = dim(label.padEnd(14));
-  console.log(pad + '  ' + l + (colour || white)(value));
+  console.log(pad + '  ' + faint(label.padEnd(14)) + (colour || ink)(value));
 }
 
 function escape(value) {
@@ -144,54 +204,56 @@ async function main() {
   const payload = buildPairingPayload(config);
   const adapters = getPrimaryNetworkInfo();
 
-  header();
+  header(payload.name);
 
   if (!payload.ip) {
-    console.log(pad + amber('No network address found.'));
-    console.log(pad + dim('Connect Wi-Fi or Ethernet and run this again.'));
+    console.log(pad + amber('  No network address found.'));
+    console.log(pad + faint('  Connect Wi-Fi or Ethernet and run this again.'));
     console.log('');
     process.exit(1);
   }
 
-  const data = JSON.stringify(payload);
+  // The compact form rather than JSON: a third fewer modules for exactly the
+  // same five values. See buildCompactPayload in src/pairing.js.
+  const data = buildCompactPayload(config);
+  const qr = QRCode.create(data, { errorCorrectionLevel: 'M' });
 
-  // Half-block characters pack two rows into one line, which keeps the code
-  // square-ish in a terminal where characters are taller than they are wide.
-  const terminalQr = await QRCode.toString(data, {
-    type: 'terminal',
-    small: true,
-    errorCorrectionLevel: 'M',
-  });
-  console.log(terminalQr.replace(/^/gm, pad));
+  // Centred under the card above it. The code's own pale field is the only
+  // frame it gets -- a box drawn around it would be one more line and one more
+  // thing to align.
+  const inset = pad + ' '.repeat(Math.max(0, Math.floor((W - qrterm.widthOf(qr)) / 2)) + 1);
+  console.log(qrterm.render(qr, { colour: useColour, indent: inset }));
+  console.log('');
 
-  console.log(pad + white('Scan that with Reveille:') + dim('  + Add PC  ›  Scan code'));
+  console.log(pad + '  ' + bold(ink('Scan it')) + faint('   Reveille  ›  + Add PC  ›  Scan code'));
   console.log('');
-  console.log(rule('├', '┤', '─'));
-  console.log('');
-  console.log(pad + dim('Or type these in by hand — they match the app’s boxes:'));
+
+  console.log(rule('or type it in'));
   console.log('');
 
   field('Name', payload.name);
-  field('IP address', payload.ip);
+  field('Address', payload.ip);
   field('Port', String(payload.port));
   field('Token', payload.token);
-  field('MAC address', payload.mac);
+  field('MAC', payload.mac);
 
   if (adapters.length > 1) {
     console.log('');
-    console.log(pad + dim('  This PC has other adapters. Use the one above unless it fails:'));
+    console.log(pad + '  ' + faint('This PC has other adapters. Use the one above unless it fails:'));
     for (const a of adapters.slice(1)) {
-      console.log(pad + dim('    ' + a.interface.padEnd(14) + a.ip.padEnd(16) + a.mac.toUpperCase()));
+      console.log(pad + '    ' + faint(a.interface.padEnd(14) + a.ip.padEnd(16) + a.mac.toUpperCase()));
     }
   }
 
   console.log('');
-  console.log(pad + amber('  ⚠  That token is the password to this PC. Don’t share it.'));
+  console.log(pad + '  ' + amber('⚠  That token is the password to this PC. Don’t share it.'));
   console.log('');
-  console.log(rule('├', '┤', '─'));
+
+  console.log(rule('also'));
   console.log('');
-  field('Get the app', APP_URL, green);
-  field('Or a browser', `http://${payload.ip}:${payload.port}`, green);
+
+  field('Get the app', APP_URL, moss);
+  field('In a browser', `http://${payload.ip}:${payload.port}`, moss);
 
   const svg = await QRCode.toString(data, { type: 'svg', errorCorrectionLevel: 'M', margin: 1 });
   const file = path.join(os.tmpdir(), 'reveille-pairing.html');
@@ -199,13 +261,13 @@ async function main() {
 
   const wantsBrowser = process.argv.includes('--open');
   if (wantsBrowser) {
-    field('Bigger code', 'opening in your browser…', dim);
+    field('Bigger code', 'opening in your browser…', faint);
     // The empty title argument is required, or `start` treats the path as one.
     exec(`start "" "${file}"`, (err) => {
       if (err) console.log(pad + '  ' + dim(file));
     });
   } else {
-    field('Bigger code', 'npm run pair -- --open', dim);
+    field('Bigger code', 'node pair.js --open', faint);
   }
 
   console.log('');
