@@ -1,0 +1,51 @@
+# Checks setup.ps1, the one-line installer and its window.
+#
+# On Windows, because Windows PowerShell 5.1 is what actually runs it, and it
+# reads a file without a byte-order mark as ANSI -- so the file must stay plain
+# ASCII, or Dutch letters and dashes in the window turn to rubbish.
+name: Setup script
+
+on:
+  push:
+    paths:
+      - "setup.ps1"
+      - "tools/app-qr.js"
+      - ".github/workflows/setup.yml"
+  pull_request:
+    paths:
+      - "setup.ps1"
+      - "tools/app-qr.js"
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install the agent's dependencies (for the QR encoder)
+        run: npm ci --omit=dev --no-audit --no-fund
+        working-directory: back-end
+
+      - name: Windows PowerShell 5.1 parses it
+        shell: powershell
+        run: |
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path setup.ps1), [ref]$null, [ref]$errors)
+          if ($errors) { $errors | ForEach-Object { "$($_.Extent.StartLineNumber): $($_.Message)" }; exit 1 }
+          'parses clean'
+
+      - name: It is plain ASCII
+        shell: powershell
+        run: |
+          $bytes = [IO.File]::ReadAllBytes((Resolve-Path setup.ps1))
+          $bad = @(for ($i = 0; $i -lt $bytes.Length; $i++) { if ($bytes[$i] -gt 127) { $i } })
+          if ($bad.Count) { "non-ASCII byte at offset $($bad[0]) (and $($bad.Count - 1) more)"; exit 1 }
+          'plain ASCII'
+
+      - name: The window's app code is the download link
+        run: node tools/app-qr.js --check

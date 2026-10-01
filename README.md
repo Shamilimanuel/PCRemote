@@ -33,33 +33,56 @@ On **macOS or Linux**, paste this into a terminal instead:
 curl -fsSL github.com/Shamilimanuel/PCRemote/raw/main/setup.sh | bash
 ```
 
-Both do the same thing and offer the same menu on a second run.
+On Windows the line opens a **setup window**. Nothing extra is downloaded for
+it: it is built straight from PowerShell, and closing it leaves nothing running.
+A first install walks through five steps:
 
-That installs Node.js if it's missing, puts the agent in `%LOCALAPPDATA%\Reveille`,
-sets it to start when you log in, checks it answers, and opens the pairing code for the
-phone to scan. No administrator rights needed.
+1. **Get the app** — an orange QR code for the phone's own camera, which
+   downloads the newest Reveille APK.
+2. **Check** — looks at Node.js, the network and the port, and changes nothing.
+3. **Install** — installs Node.js if it's missing, puts the agent in
+   `%LOCALAPPDATA%\Reveille`, sets it to start when you log in, and checks it
+   answers. A live log shows each step. No administrator rights needed.
+4. **Extras** — [Reboot to BIOS](#rebooting-into-bios) and
+   [answering at the lock screen](#answering-at-the-lock-screen), both off
+   unless you turn them on. Each says what it grants before Windows asks for
+   administrator, and they are the only parts that ever do.
+5. **Pair** — a blue QR code for the Reveille app to scan.
+
+After that, the window has four pages: **Pair a phone** (both codes, and the
+values to type in by hand), **This PC** (what's running and whether it's up to
+date), **Permissions** (the two extras, as switches) and **Maintenance**
+(update, repair, new pairing code, remove).
+
+Installing also makes a command. From then on, type
+
+```powershell
+reveille
+```
+
+in PowerShell, cmd or Win+R to open the window again. It fetches the newest
+version from GitHub each time, the same way the one-liner does. Removing
+Reveille removes the command too.
 
 Run it again any time to upgrade — it keeps your token, so the phone stays paired.
 
-Run it again later and it offers a menu instead of silently reinstalling —
-update, repair, show the pairing code, or remove. The one line is the only thing
-worth memorising, so it is the way in to everything.
+On macOS and Linux, and on Windows with no desktop (over SSH, on Server Core),
+it is a text menu instead: update, repair, show the pairing code, or remove.
 
-Partway through a first install it asks whether you want a **Reboot to BIOS**
-button, explains exactly what saying yes grants, and carries on either way. That is the only part
-that needs administrator, and it is a question rather than an assumption — see
-[Rebooting into BIOS](#rebooting-into-bios).
-
-Options need the longer form, because `iex` can't take arguments:
+Options need the longer form, because `iex` can't take arguments. Any of them
+except `-Path` gives the text version, since they are for scripted installs:
 
 ```powershell
 $s = 'github.com/Shamilimanuel/PCRemote/raw/main/setup.ps1'
 
+& ([scriptblock]::Create((irm $s))) -Console       # the text version, on purpose
 & ([scriptblock]::Create((irm $s))) -Uninstall     # remove it all
 & ([scriptblock]::Create((irm $s))) -Firmware      # say yes without being asked
 & ([scriptblock]::Create((irm $s))) -NoFirmware    # skip the question
 & ([scriptblock]::Create((irm $s))) -NoAutoStart   # don't start at login
 ```
+
+With the command installed, `reveille -Console` does the same as the first line.
 
 ### What works on which system
 
@@ -449,7 +472,7 @@ loses them.
 
 The agent speaks plain HTTP and cannot honestly do otherwise: a self-signed
 certificate makes the phone refuse the connection, no certificate authority
-will issue one for `192.168.1.72`, and pinning a per-install certificate in
+will issue one for `192.168.1.50`, and pinning a per-install certificate in
 React Native needs a native module and compile-time configuration — there is
 nothing to pin at build time. So the traffic is readable on your network.
 
