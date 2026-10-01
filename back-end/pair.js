@@ -199,10 +199,51 @@ function buildPage(payload, adapters, svg) {
 
 // ------------------------------------------------------------------- main --
 
+/**
+ * The same values as data, for the setup window to draw itself.
+ *
+ * The window has no QR encoder of its own -- writing one in PowerShell would be
+ * a second implementation of something this file already does correctly -- so
+ * it asks for the finished module grid instead, one row per string, '1' for a
+ * dark module. Nothing is printed but the JSON, so the caller can parse stdout
+ * whole.
+ */
+function printJson(config, payload, adapters) {
+  const data = buildCompactPayload(config);
+  const qr = data ? QRCode.create(data, { errorCorrectionLevel: 'M' }) : null;
+  const rows = [];
+  if (qr) {
+    const n = qr.modules.size;
+    for (let r = 0; r < n; r++) {
+      let row = '';
+      for (let c = 0; c < n; c++) row += qr.modules.data[r * n + c] ? '1' : '0';
+      rows.push(row);
+    }
+  }
+  const json = JSON.stringify({
+    name: payload.name,
+    ip: payload.ip,
+    port: payload.port,
+    token: payload.token,
+    mac: payload.mac,
+    qr: rows,
+    adapters: adapters.map((a) => ({ interface: a.interface, ip: a.ip, mac: a.mac.toUpperCase() })),
+  });
+  // ASCII only: PowerShell decodes stdout with the console's code page, which
+  // the chcp above may or may not have changed, so a PC or adapter name with
+  // an accent in it would arrive mangled. \u escapes survive any code page.
+  process.stdout.write(json.replace(/[^\x00-\x7e]/g, (c) => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0')));
+}
+
 async function main() {
   const config = loadOrCreateConfig();
   const payload = buildPairingPayload(config);
   const adapters = getPrimaryNetworkInfo();
+
+  if (process.argv.includes('--json')) {
+    printJson(config, payload, adapters);
+    return;
+  }
 
   header(payload.name);
 

@@ -5,7 +5,7 @@ const crypto = require('crypto');
  *
  * The agent speaks plain HTTP. It has to: a self-signed certificate makes the
  * phone refuse the connection, no certificate authority will issue one for
- * 192.168.1.72, and pinning a per-install certificate in React Native needs a
+ * 192.168.1.50, and pinning a per-install certificate in React Native needs a
  * native module and compile-time configuration -- there is nothing to pin at
  * build time. So TLS is not available here in any honest form.
  *

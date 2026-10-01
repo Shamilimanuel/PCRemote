@@ -1,7 +1,7 @@
 # Reveille — status and checklist
 
 Working notes, kept so a new chat can pick up without re-deriving anything.
-Last updated: **18 September 2026**, at **v1.0.20**.
+Last updated: **1 October 2026**, at **v1.0.21**.
 
 **How we work this list:** items are worked top to bottom. Pick one, say the
 name, and it gets built. When it is done it moves to *Recently done* and we go
@@ -25,9 +25,10 @@ four screenshots from the phone, which unblock the IzzyOnDroid listing. See
 
 | | |
 |---|---|
-| Version | **1.0.20** (versionCode 10020) |
+| Version | **1.0.21** (versionCode 10021) |
 | Repo | `github.com/Shamilimanuel/PCRemote` (public, MIT) |
-| Install (Windows) | `irm github.com/Shamilimanuel/PCRemote/raw/main/setup.ps1 \| iex` |
+| Install (Windows) | `irm github.com/Shamilimanuel/PCRemote/raw/main/setup.ps1 \| iex` — opens the setup window |
+| Open it again | type `reveille` in PowerShell (made by the installer) |
 | Install (macOS/Linux) | `curl -fsSL github.com/Shamilimanuel/PCRemote/raw/main/setup.sh \| bash` |
 | Phone app | APK on GitHub Releases, Android arm64-v8a, ~38 MB |
 | iPhone | web version served by the agent at its own address (no Wake) |
@@ -63,6 +64,7 @@ cd integrations/home-assistant && pytest -q          # the HA integration      1
                                                      # (Linux/macOS only)
 cd front-end && npx tsx src/lib/wakeRules.test.ts   # wake state machine       26
 node tools/check-websign.js                         # browser crypto vs node   58
+node tools/app-qr.js --check                        # setup window's app code
 cd front-end && npx tsc --noEmit                    # types + i18n completeness
 ```
 
@@ -171,6 +173,13 @@ Open items only, in the order I would do them. Anything finished has moved to
   unproven rather than shipped.
 
 
+- [ ] **Click through the setup window on a clean PC**
+  Everything that can be checked without a person has been; a first install
+  from start to finish, on a PC that has never had Reveille, has not. Worth
+  doing once in a Windows Sandbox or a spare user account before telling
+  anyone about the window.
+
+
 - [ ] **Remove the Bearer token fallback**
   Kept for one release so updating the app or the agent first does not lock
   anyone out. `REVEILLE_REQUIRE_SIGNING=1` already turns it off. Flip the
@@ -183,6 +192,40 @@ Open items only, in the order I would do them. Anything finished has moved to
 
 Kept in date order, newest first, so it is obvious what changed lately without
 reading the whole of **Done**.
+
+- [x] **The setup window, and the `reveille` command** *(1 Oct, no app release needed)*
+  The one-line command now opens a window on Windows instead of printing to the
+  terminal, built from the design artifact: a sidebar, light and dark, English
+  and Dutch. A first install is five steps — get the app (an orange code for
+  the phone's camera), check, install with a live log, the two extras (both off
+  by default), pair (the blue code for the app). After that it has four pages:
+  Pair a phone, This PC, Permissions, Maintenance. Android only for now; the
+  iPhone route stays out until it is wanted.
+  Installing also writes `reveille.cmd` (and `reveile.cmd`) to
+  `%LOCALAPPDATA%\Microsoft\WindowsApps`, the way Housecall does it, so typing
+  `reveille` opens the window again. Removing Reveille removes them.
+  Slow work runs in a background worker that is given `setup.ps1`'s own
+  functions, so the window and the terminal run exactly the same steps.
+  `-Console`, any scripted option, SSH or no desktop all still get the text
+  version. Administrator is only asked for when one of the two extras is
+  switched on or off.
+  The app-download code is fixed (the download link never changes) and lives
+  in `setup.ps1` as rows of 0 and 1; `tools/app-qr.js --check` and the new
+  `Setup script` workflow make sure it still matches the link, that Windows
+  PowerShell 5.1 parses the file, and that it is still plain ASCII.
+  `pair.js --json` hands the window the pairing values and the finished QR grid.
+  **Not tested by clicking:** every page was drawn to a picture in both themes
+  and both languages and checked, the worker ran status and a pretend install
+  for real, and the real window opened and closed cleanly — but nobody has
+  yet clicked through a first install on a clean PC.
+  *A copy installed before this has no `pair.js --json`, so its Pair page says
+  to Update first. One click on Update fixes it.*
+
+
+- [x] **Smaller pairing code, and the terminal screen in dusk** *(19 Sep, v1.0.21)*
+  37 modules square instead of 49: the payload is positional
+  (`R1*ip*port*TOKEN*MAC*name`) instead of JSON, and uppercase so QR's dense
+  alphanumeric mode carries it. The phone reads both forms.
 
 - [x] **Distribution, part one: the store listing** *(18 Sep)*
   **Correction to an earlier note in this file:** in-app updates already work
