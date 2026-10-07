@@ -16,6 +16,9 @@ set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
 out="${1:-$root/dist/agent}"
+# Absolute, because the packing below runs from inside each package folder.
+mkdir -p "$out"
+out="$(cd "$out" && pwd)"
 major="${NODE_MAJOR:-24}"
 sha="${GITHUB_SHA:-$(git -C "$root" rev-parse HEAD)}"
 
