@@ -12,6 +12,12 @@
 # why setup.ps1 is kept to pure ASCII. CRLF is what Windows tooling expects.
 *.ps1 text eol=crlf
 
+# The same for the other Windows scripts that ship inside the agent download.
+# That download is packed on Linux, where a plain checkout would hand cmd.exe
+# and wscript.exe files with LF endings.
+*.cmd text eol=crlf
+*.vbs text eol=crlf
+
 # Binary, so never touched.
 *.png binary
 *.jpg binary

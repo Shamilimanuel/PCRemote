@@ -1,0 +1,85 @@
+# Builds the PC half -- the agent with Node.js inside it -- and publishes it to
+# the `agent` release, which is what setup.ps1 and setup.sh download.
+#
+# That release is a pre-release on purpose. The phone app looks for updates at
+# /releases/latest, and the "Get the app" QR code points at
+# releases/latest/download/reveille.apk; a pre-release is never "latest", so
+# neither can ever land on this one by mistake.
+#
+# Only a push to main publishes. Anything else builds and stops, to prove the
+# bundle still assembles.
+name: Build PC agent
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "back-end/**"
+      - "tools/bundle-agent.sh"
+      - ".github/workflows/agent.yml"
+  pull_request:
+    paths:
+      - "back-end/**"
+      - "tools/bundle-agent.sh"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Build the downloads
+        run: bash tools/bundle-agent.sh dist/agent
+
+      - name: A download starts and answers, with only its own Node
+        run: |
+          # The Linux one, since that is what this machine can run. Every
+          # download is the same agent and the same packages; only the Node
+          # binary differs.
+          mkdir -p /tmp/try
+          tar -xzf dist/agent/reveille-agent-linux-x64.tar.gz -C /tmp/try
+          cd /tmp/try
+          token="$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+          printf '{"port":5599,"token":"%s"}' "$token" > config.json
+          ./node/node src/index.js > agent.log 2>&1 &
+          agent=$!
+          for i in $(seq 1 30); do
+            curl -fs -H "Authorization: Bearer $token" http://127.0.0.1:5599/health > health.json && break
+            sleep 1
+          done
+          python3 -c 'import json; h=json.load(open("health.json")); assert h["status"]=="ok", h; print("agent answered:", h["hostname"], h["os"])'
+          ./node/node pair.js --json | python3 -c 'import json,sys; d=json.load(sys.stdin); assert len(d["qr"])>20; print("pairing code:", len(d["qr"]), "modules")'
+          kill "$agent"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: agent-downloads
+          path: dist/agent/
+
+      - name: Publish to the agent release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh release view agent > /dev/null 2>&1; then
+            gh release create agent --target "$GITHUB_SHA" --prerelease --latest=false \
+              --title "PC agent" \
+              --notes "The PC half of Reveille, with Node.js inside it. You do not download this by hand: the setup command does."
+          fi
+          node=$(python3 -c 'import json;print(json.load(open("dist/agent/version.json"))["node"])')
+          # The downloads first and the fingerprints last, so an install that
+          # starts halfway through sees an old SHA256SUMS that does not match a
+          # new file -- and refuses -- rather than the other way round.
+          gh release upload agent dist/agent/reveille-agent-* --clobber
+          gh release upload agent dist/agent/SHA256SUMS dist/agent/version.json --clobber
+          gh release edit agent --prerelease --latest=false --notes "The PC half of Reveille, with Node.js inside it. You do not download this by hand: the setup command does.
+
+          Built from $GITHUB_SHA with Node $node."

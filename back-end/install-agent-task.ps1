@@ -21,13 +21,14 @@ if ($legacy) {
     Unregister-ScheduledTask -TaskName $legacyTaskName -Confirm:$false
 }
 
-$nodeCmd = Get-Command node -ErrorAction SilentlyContinue
-if (-not $nodeCmd) {
-    Write-Error 'node.exe was not found on PATH. Install Node.js first: https://nodejs.org'
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+
+# The installer ships its own Node next to this script; only a copy set up by
+# hand needs one on the PATH.
+if (-not (Test-Path (Join-Path $scriptDir 'node\node.exe')) -and -not (Get-Command node -ErrorAction SilentlyContinue)) {
+    Write-Error 'node.exe was not found next to this script or on PATH. Install Node.js first: https://nodejs.org'
     exit 1
 }
-
-$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $launcher = Join-Path $scriptDir 'start-agent-hidden.vbs'
 if (-not (Test-Path $launcher)) {
     Write-Error "Missing $launcher - it should sit next to this script."

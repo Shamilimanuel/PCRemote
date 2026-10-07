@@ -41,14 +41,19 @@ if (-not (Test-Path $entry)) {
     exit 1
 }
 
-$nodeCmd = Get-Command node -ErrorAction SilentlyContinue
-if (-not $nodeCmd) {
-    Write-Error 'node.exe was not found on PATH. Install Node.js first: https://nodejs.org'
-    exit 1
+# The installer ships its own Node next to this script. A copy set up by hand
+# uses the one on PATH, resolved to a full path: the task runs before any user
+# profile is loaded, where PATH is the machine's and not necessarily the one
+# this shell inherited.
+$nodeExe = Join-Path $scriptDir 'node\node.exe'
+if (-not (Test-Path $nodeExe)) {
+    $nodeCmd = Get-Command node -ErrorAction SilentlyContinue
+    if (-not $nodeCmd) {
+        Write-Error 'node.exe was not found next to this script or on PATH. Install Node.js first: https://nodejs.org'
+        exit 1
+    }
+    $nodeExe = $nodeCmd.Source
 }
-# Resolve node to a full path: the task runs before any user profile is loaded,
-# where PATH is the machine's and not necessarily the one this shell inherited.
-$nodeExe = $nodeCmd.Source
 
 # Which port to open. Kept in step with presence.js: the agent's port + 1 unless
 # config.json names one outright.
