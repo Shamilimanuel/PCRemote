@@ -1,7 +1,7 @@
 # Reveille — status and checklist
 
 Working notes, kept so a new chat can pick up without re-deriving anything.
-Last updated: **1 October 2026**, at **v1.0.21**.
+Last updated: **8 October 2026**, at **v1.0.21**.
 
 **How we work this list:** items are worked top to bottom. Pick one, say the
 name, and it gets built. When it is done it moves to *Recently done* and we go
@@ -157,20 +157,46 @@ Open items only, in the order I would do them. Anything finished has moved to
   integration's README explains that chain.
 
 
-- [ ] **Rewrite the agent in Go**
-  The whole agent is ~1,700 lines. Go gives one ~8–12 MB binary with no
-  runtime: no Node install, no npm, no execution-policy failure mode, and 97
-  dependencies become about 2. `setup.ps1` would lose more than half its length
-  and most of its ways to fail. CI cross-compiles all five targets from one
-  job. `web/` embeds unchanged via `go:embed`.
-  *Cost: it is a rewrite of something that works, and everything Windows-side
-  needs re-testing. Do it after the protocol has settled, not before.*
+- [ ] **Rewrite the agent in Go** — *blocked on code signing*
+  Started on 8 October and stopped within the hour, for a reason that is not
+  about code: **Smart App Control is on and enforcing on the dev PC**, and it
+  blocked the very first test binary ("An Application Control policy has
+  blocked this file"). It blocks anything neither signed nor already known to
+  Microsoft, so an unsigned Go agent would be blocked on every Windows 11 PC
+  that has it switched on — and it cannot be switched back on once off, so
+  telling people to turn it off is not an answer.
+  The user-visible goal (nothing to install first) was reached another way:
+  Node now ships inside the download — see *Recently done*. Go would still
+  shrink the download from ~35 MB to ~10 MB, and is worth doing **once there
+  is a signature**: SignPath Foundation signs open-source projects for free
+  (application, then approval; whether a minor can apply is unknown), or a
+  paid certificate. The first Go files (signing, with its test vectors) are not
+  in the repo; the design is in the 8 October conversation.
 
 
 - [ ] **Test the macOS and Linux agents on real hardware**
   They are written, they parse, the commands are built from documented
   behaviour — and nobody has ever run them. Until someone does, treat them as
   unproven rather than shipped.
+
+
+- [ ] **Set the home network to Private on the dev PC** ← quick, and it matters
+  Windows has the Ethernet as **Public**. The lock-screen responder's firewall
+  rule was made for Private and Domain only, so on this PC the phone has very
+  likely never reached it — which matches the old "Wake says failed until I log
+  in" report. Settings › Network & internet › Ethernet › **Private network**
+  fixes it outright. The rules made from now on also cover whatever network
+  the PC is on, so turning the lock-screen answer off and on again in the
+  window fixes it too.
+
+
+- [ ] **Wake from another network (4G/5G, another Wi-Fi)**
+  Everything except Wake already works away from home with Tailscale and the
+  app's *Remote address* field. Wake cannot, by itself: the magic packet only
+  travels on the local network, and a PC that is off runs nothing that could
+  receive one from outside. It needs something at home that stays on to send
+  it — a router with Wake-on-LAN built in (FRITZ!Box and others), a Raspberry
+  Pi, Home Assistant, or an old phone. Asked for on 8 October; not designed yet.
 
 
 - [ ] **Click through the setup window on a clean PC**
@@ -192,6 +218,29 @@ Open items only, in the order I would do them. Anything finished has moved to
 
 Kept in date order, newest first, so it is obvious what changed lately without
 reading the whole of **Done**.
+
+- [x] **Node.js comes with the download** *(8 Oct, no app release needed)*
+  Nothing has to be installed before Reveille any more — no Node.js, no npm,
+  no winget, no Homebrew or apt password on a Mac or Linux. A new workflow,
+  `Build PC agent`, packs the agent, its packages already installed, and the
+  official Node.js 24 from nodejs.org (checked against Node's own SHASUMS256)
+  into one download per system, ~31–44 MB, and publishes them with SHA-256
+  fingerprints to the `agent` **pre-release** — so the app's update check and
+  the "Get the app" link, which both look at `releases/latest`, never see it.
+  `setup.ps1` and `setup.sh` download one file, check its fingerprint, unpack
+  it. A copy still running is handled: Windows will not delete a running
+  `node.exe` but will rename one, so it goes aside and the next install clears
+  it. Updates compare against the release's `version.json`, not `main`, so a
+  commit that never touched the agent no longer reads as an update.
+  Tested on this PC into a throwaway folder: installed and answering in 25 s,
+  `node.exe`'s signature valid under Smart App Control, token kept, a second
+  install over the running copy fine, and the window reading it all back.
+  Windows Firewall asks about Node.js the first time; if that is missed, the
+  window now says so and has an **Allow through the firewall** button.
+  *Your own install is still the old kind (system Node). Update, in the
+  window's Maintenance page, moves it over; Windows will ask about the
+  firewall once afterwards.*
+
 
 - [x] **The setup window, and the `reveille` command** *(1 Oct, no app release needed)*
   The one-line command now opens a window on Windows instead of printing to the

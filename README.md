@@ -39,10 +39,11 @@ A first install walks through five steps:
 
 1. **Get the app** — an orange QR code for the phone's own camera, which
    downloads the newest Reveille APK.
-2. **Check** — looks at Node.js, the network and the port, and changes nothing.
-3. **Install** — installs Node.js if it's missing, puts the agent in
-   `%LOCALAPPDATA%\Reveille`, sets it to start when you log in, and checks it
-   answers. A live log shows each step. No administrator rights needed.
+2. **Check** — looks at Windows, the network and the port, and changes nothing.
+3. **Install** — downloads the agent (about 35 MB, with Node.js inside it),
+   checks its fingerprint, puts it in `%LOCALAPPDATA%\Reveille`, sets it to
+   start when you log in, and checks it answers. A live log shows each step.
+   **Nothing has to be installed first** — no Node.js, no npm, no winget.
 4. **Extras** — [Reboot to BIOS](#rebooting-into-bios) and
    [answering at the lock screen](#answering-at-the-lock-screen), both off
    unless you turn them on. Each says what it grants before Windows asks for
@@ -134,9 +135,8 @@ A redirect is only safe when the redirect is yours.
 > `... cannot be loaded because running scripts is disabled on this system.`
 
 A fresh Windows install refuses to run any PowerShell script file. The one-line
-installer is unaffected — `iex` runs a string, not a file — and it calls
-`npm.cmd` rather than `npm` precisely so it keeps working on an untouched
-machine. (`npm` in PowerShell resolves to `npm.ps1`, which is a script file.)
+installer is unaffected — `iex` runs a string, not a file — and nothing it
+installs is a script file either.
 
 You only meet this if you run the `.ps1` helpers by hand. To allow your own
 scripts while still requiring downloaded ones to be signed:
@@ -148,9 +148,28 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 That is a real security setting. `RemoteSigned` is the sensible middle — it does
 not disable anything for files that came from the internet.
 
+### Why Node.js comes with it
+
+The download is built by `.github/workflows/agent.yml` and published to a
+pre-release called `agent`: the agent, its packages already installed, and the
+official Node.js from nodejs.org, checked against Node's own published
+checksums. The installer checks the download against the fingerprints published
+next to it before unpacking anything.
+
+It is Node rather than a single compiled program for a reason that has nothing
+to do with code. Windows 11's **Smart App Control** blocks programs that are
+neither signed nor already known to Microsoft. Node's own `node.exe` is signed
+by the OpenJS Foundation, so it runs; a program compiled for this project would
+be unsigned, and blocked on every PC that has Smart App Control switched on.
+
+The first time the agent starts, Windows Firewall asks whether Node.js may use
+the network. Say **Allow**. If that question was missed, the setup window shows
+a warning with a button that adds the rule instead.
+
 ### Doing it by hand instead
 
-The installer is only convenience — nothing depends on it.
+The installer is only convenience — nothing depends on it. By hand, you need
+Node.js 20 or newer yourself:
 
 ```bash
 cd back-end
@@ -368,7 +387,7 @@ packets after an SDK bump, that dependency is the first place to look.
 
 1. Open the app, tap **+ Add PC**. The **?** in the top corner explains the whole setup
    if this is the first time — including the command to run on the PC.
-2. Tap **Scan code** and point the camera at the page `npm run pair` opened on the PC.
+2. Tap **Scan code** and point the camera at the blue code in the setup window on the PC.
    Every field fills itself in.
 3. Tap **Test connection**, then **Save**.
 

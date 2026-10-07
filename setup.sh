@@ -11,14 +11,26 @@
 set -euo pipefail
 
 REPO="Shamilimanuel/PCRemote"
-BRANCH="main"
-MIN_NODE_MAJOR=20
 
 case "$(uname -s)" in
   Darwin) OS="macos"; INSTALL_DIR="$HOME/Library/Application Support/Reveille" ;;
   Linux)  OS="linux"; INSTALL_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/reveille" ;;
   *) echo "Reveille has no agent for $(uname -s). Windows, macOS and Linux only." >&2; exit 1 ;;
 esac
+
+# Which download fits this machine. Each one has the agent, its packages and
+# Node.js inside it, so nothing has to be installed first -- no Homebrew, no
+# apt, no password.
+case "$(uname -s)-$(uname -m)" in
+  Darwin-arm64)                TARGET="darwin-arm64" ;;
+  Darwin-x86_64)               TARGET="darwin-x64" ;;
+  Linux-x86_64)                TARGET="linux-x64" ;;
+  Linux-aarch64|Linux-arm64)   TARGET="linux-arm64" ;;
+  *) echo "Reveille has no download for $(uname -s) on $(uname -m)." >&2; exit 1 ;;
+esac
+
+# The Node that came with Reveille.
+NODE="$INSTALL_DIR/node/node"
 
 # ------------------------------------------------------------------ output --
 
@@ -53,97 +65,53 @@ ART
   printf '\n'
 }
 
-# -------------------------------------------------------------------- node --
-
-node_version() { node --version 2>/dev/null | sed 's/^v//'; }
-node_major()   { node_version | cut -d. -f1; }
-
-install_node() {
-  # Only package managers the user already chose to have. Installing a package
-  # manager in order to install Node would be a bigger decision than this
-  # script should be making on someone's behalf.
-  if [ "$OS" = macos ] && command -v brew >/dev/null 2>&1; then
-    step "Installing Node.js via Homebrew..."
-    brew install node
-  elif command -v apt-get >/dev/null 2>&1; then
-    step "Installing Node.js via apt (this asks for your password)..."
-    sudo apt-get update -qq && sudo apt-get install -y nodejs npm
-  elif command -v dnf >/dev/null 2>&1; then
-    step "Installing Node.js via dnf (this asks for your password)..."
-    sudo dnf install -y nodejs
-  elif command -v pacman >/dev/null 2>&1; then
-    step "Installing Node.js via pacman (this asks for your password)..."
-    sudo pacman -S --noconfirm nodejs npm
-  else
-    die "Install Node.js $MIN_NODE_MAJOR or newer first, then run this again:
-    https://nodejs.org  (take the LTS download)"
-  fi
-}
-
-resolve_node() {
-  if command -v node >/dev/null 2>&1; then
-    local major
-    major="$(node_major)"
-    if [ -n "$major" ] && [ "$major" -ge "$MIN_NODE_MAJOR" ]; then
-      dim "Node.js $(node_version)"
-      return 0
-    fi
-    warn "Node.js $(node_version) is too old ($MIN_NODE_MAJOR or newer needed)."
-  else
-    step "Node.js is not installed. It is what runs the agent."
-  fi
-
-  install_node
-
-  command -v node >/dev/null 2>&1 || die "Node.js was installed but this shell cannot see it yet.
-  Close this terminal, open a new one, and run the same command again."
-  [ "$(node_major)" -ge "$MIN_NODE_MAJOR" ] \
-    || die "Node.js $(node_version) is still too old. Take the LTS build from https://nodejs.org"
-  ok "Node.js $(node_version)"
-}
-
 # ---------------------------------------------------------------- download --
 
+sha256_of() {
+  if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d' ' -f1
+  else shasum -a 256 "$1" | cut -d' ' -f1
+  fi
+}
+
 get_files() {
-  local tmp source sha
+  local tmp base name want got
   tmp="$(mktemp -d)"
   trap 'rm -rf "$tmp"' RETURN
+  base="https://github.com/$REPO/releases/download/agent"
+  name="reveille-agent-$TARGET.tar.gz"
 
   step "Downloading the agent..."
-  curl -fsSL "https://github.com/$REPO/archive/refs/heads/$BRANCH.tar.gz" -o "$tmp/src.tar.gz" \
+  curl -fsSL "$base/SHA256SUMS" -o "$tmp/SHA256SUMS" \
+    && curl -fsSL "$base/$name" -o "$tmp/$name" \
     || die "Could not download the agent. Check your internet connection."
-  tar -xzf "$tmp/src.tar.gz" -C "$tmp"
 
-  source="$(find "$tmp" -maxdepth 2 -type d -name back-end | head -1)"
-  [ -n "$source" ] || die "The download did not contain the agent. Try again."
+  # Something that will start at every log in is checked before it is
+  # unpacked: its fingerprint has to be the one published beside it.
+  step "Checking the download..."
+  want="$(grep "  $name\$" "$tmp/SHA256SUMS" | cut -d' ' -f1)"
+  got="$(sha256_of "$tmp/$name")"
+  [ -n "$want" ] && [ "$want" = "$got" ] \
+    || die "The download did not match its published fingerprint, so it was not installed.
+  Try again in a few minutes."
+
+  step "Unpacking it..."
+  mkdir -p "$tmp/stage"
+  tar -xzf "$tmp/$name" -C "$tmp/stage"
 
   mkdir -p "$INSTALL_DIR"
-  # Copy over the top: this replaces the code and leaves node_modules and the
-  # saved config alone, so an update keeps the pairing token it already has.
-  ( cd "$source" && tar -cf - . ) | ( cd "$INSTALL_DIR" && tar -xf - )
+  # Everything is replaced apart from the pairing and the note of which update
+  # was last mentioned, so an update keeps the token the phone already has.
+  find "$INSTALL_DIR" -mindepth 1 -maxdepth 1 \
+    ! -name config.json ! -name update-state.json -exec rm -rf {} +
+  ( cd "$tmp/stage" && tar -cf - . ) | ( cd "$INSTALL_DIR" && tar -xf - )
 
-  # Record which commit this copy came from. The agent compares it against main
-  # to notice when the machine half has fallen behind -- it is fetched from a
-  # branch, not a release, so a commit is the only honest version it has. Same
-  # file setup.ps1 writes, read by the same code.
-  #
-  # The response is compact JSON on one line, and it mentions several shas --
-  # the tree, the parents, every changed file. sed is greedy, so matching the
-  # line as a whole would return the last of them. Splitting on commas first
-  # puts each field on its own line, and the commit's own sha is the first.
-  sha="$(curl -fsSL -H 'User-Agent: reveille-setup' \
-          "https://api.github.com/repos/$REPO/commits/$BRANCH" 2>/dev/null \
-          | tr ',' '\n' \
-          | sed -n 's/.*"sha"[[:space:]]*:[[:space:]]*"\([0-9a-f]\{40\}\)".*/\1/p' \
-          | head -1)"
-  if [ -n "$sha" ]; then
-    printf '{"sha":"%s","installedAt":"%s"}\n' \
-      "$sha" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$INSTALL_DIR/installed.json"
-  else
-    dim "could not record the installed version (update checks will stay quiet)"
-  fi
+  # Which build this is: the agent compares it with the release's version.json
+  # to notice when it has fallen behind. Same file setup.ps1 writes.
+  local sha
+  sha="$(sed -n 's/.*"sha"[[:space:]]*:[[:space:]]*"\([0-9a-f]\{40\}\)".*/\1/p' "$INSTALL_DIR/version.json" | head -1)"
+  printf '{"sha":"%s","installedAt":"%s"}\n' "$sha" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$INSTALL_DIR/installed.json"
 
-  dim "installed to $INSTALL_DIR"
+  dim "installed to $INSTALL_DIR, with Node.js $("$NODE" --version)"
 }
 
 # --------------------------------------------------------------- autostart --
@@ -152,8 +120,7 @@ LAUNCH_AGENT="$HOME/Library/LaunchAgents/sh.reveille.agent.plist"
 SYSTEMD_UNIT="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/reveille.service"
 
 register_autostart() {
-  local node_bin
-  node_bin="$(command -v node)"
+  local node_bin="$NODE"
 
   if [ "$OS" = macos ]; then
     step "Setting it to start when you log in..."
@@ -183,7 +150,7 @@ PLIST
 
   if ! command -v systemctl >/dev/null 2>&1; then
     warn "No systemd here, so it cannot be started for you automatically."
-    dim "Start it yourself with:  node '$INSTALL_DIR/src/index.js'"
+    dim "Start it yourself with:  '$NODE' '$INSTALL_DIR/src/index.js'"
     return 0
   fi
 
@@ -261,12 +228,12 @@ reset_token() {
   fi
 
   # 24 random bytes as hex, matching generateToken in back-end/src/config.js.
-  # node is already a requirement, so use it rather than hoping for openssl.
+  # Reveille's own Node is right there, so use it rather than hoping for openssl.
   local token
-  token="$(node -e 'process.stdout.write(require("crypto").randomBytes(24).toString("hex"))')" \
+  token="$("$NODE" -e 'process.stdout.write(require("crypto").randomBytes(24).toString("hex"))')" \
     || { warn "Could not generate a new code."; return 1; }
 
-  node -e '
+  "$NODE" -e '
     const fs = require("fs");
     const [file, token] = process.argv.slice(1);
     const config = JSON.parse(fs.readFileSync(file, "utf8").replace(/^﻿/, ""));
@@ -331,35 +298,28 @@ show_menu() {
 # -------------------------------------------------------------------- main --
 
 banner
-resolve_node
 
-# node_modules, not package.json: the files are copied into place before npm
-# runs, so a run that died during npm leaves a folder that looks installed but
-# cannot start. That person wants the install to finish, not a menu.
-if [ -f "$INSTALL_DIR/package.json" ] && [ -d "$INSTALL_DIR/node_modules" ]; then
+# Its own Node, not just its files: a copy from before Node came with the
+# download has no node/, and the way to fix that is to update, not a menu.
+if [ -f "$INSTALL_DIR/package.json" ] && [ -x "$NODE" ]; then
   case "$(show_menu)" in
     quit)   printf '\n'; exit 0 ;;
     remove) remove_all; exit 0 ;;
-    pair)   ( cd "$INSTALL_DIR" && node pair.js ); exit 0 ;;
-    rotate) if reset_token; then ( cd "$INSTALL_DIR" && node pair.js ); fi; exit 0 ;;
+    pair)   ( cd "$INSTALL_DIR" && "$NODE" pair.js ); exit 0 ;;
+    rotate) if reset_token; then ( cd "$INSTALL_DIR" && "$NODE" pair.js ); fi; exit 0 ;;
     *)      printf '\n' ;;
   esac
 fi
 
 stop_agent
 get_files
-
-step "Installing what it needs..."
-( cd "$INSTALL_DIR" && npm install --omit=dev --no-audit --no-fund --loglevel=error >/dev/null ) \
-  || die "npm install failed. Check your internet connection and try again."
-
 register_autostart
 
 printf '\n'
 ok "Reveille is ready."
 printf '\n'
-( cd "$INSTALL_DIR" && node pair.js )
+( cd "$INSTALL_DIR" && "$NODE" pair.js )
 printf '\n'
 printf '  %sTo show the pairing code again later:%s\n' "$C_BOLD" "$C_OFF"
-dim "  cd '$INSTALL_DIR'; node pair.js"
+dim "  cd '$INSTALL_DIR'; ./node/node pair.js"
 printf '\n'
