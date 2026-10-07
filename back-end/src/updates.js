@@ -6,12 +6,14 @@ const { toast } = require('./notify');
  * Tells you when the PC half is out of date.
  *
  * The phone app checks GitHub's releases, because an APK is a release. The
- * agent cannot: it is fetched from `main` by the installer, not from a release,
- * so its "version" is the commit it was installed from. `installed.json` is
- * written by setup.ps1 at install time and holds that commit.
+ * agent comes from a release of its own: `agent`, rebuilt by CI whenever
+ * back-end/ changes, with Node.js inside it so nobody has to install Node.
+ * Its version.json names the commit that build was made from, and
+ * `installed.json` -- written by the installer -- names the commit this copy
+ * came from. Different means behind.
  *
- * Comparing it to whatever `main` points at now is exact, and needs no version
- * number kept in step by hand.
+ * That replaces comparing against `main`, which moves on every commit,
+ * including the ones that never touch the agent, and so cried wolf.
  */
 
 const REPO = 'Shamilimanuel/PCRemote';
@@ -43,13 +45,16 @@ function installedSha() {
   return installed && typeof installed.sha === 'string' ? installed.sha : null;
 }
 
+// A release download rather than the API: no rate limit, and no token needed.
+const LATEST_URL = `https://github.com/${REPO}/releases/download/agent/version.json`;
+
 async function latestSha() {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8000);
   try {
-    const response = await fetch(`https://api.github.com/repos/${REPO}/commits/main`, {
+    const response = await fetch(LATEST_URL, {
       signal: controller.signal,
-      headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'reveille-agent' },
+      headers: { 'User-Agent': 'reveille-agent' },
     });
     if (!response.ok) return null;
     const body = await response.json();
@@ -94,7 +99,9 @@ async function check({ notify = false } = {}) {
 
   const shown = await toast({
     title: 'Reveille — update available',
-    body: 'The PC side is behind. Run the setup command again to update it.',
+    body: process.platform === 'win32'
+      ? 'The PC side is behind. Type reveille in PowerShell and choose Update.'
+      : 'The PC side is behind. Run the setup command again to update it.',
     url: `https://github.com/${REPO}`,
   });
   if (shown) writeJson(STATE_PATH, { notifiedSha: latest, notifiedAt: state.checkedAt });
