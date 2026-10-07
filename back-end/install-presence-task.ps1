@@ -93,13 +93,21 @@ Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger `
 
 # The agent gets its firewall rule from Node's own "allow this app?" prompt on
 # first listen. This one never sees that prompt -- nobody is logged in when it
-# starts -- so the rule has to be made here. Private and domain networks only:
-# this is a LAN tool, and a coffee shop is not a LAN you want answering.
+# starts -- so the rule has to be made here.
+#
+# Home and work networks, plus whatever this PC is on right now. Windows calls
+# a network Public whenever someone said no to being discoverable on it, which
+# is a common answer at home, and a rule for Private alone would then silently
+# never apply. The responder still refuses anything from off the local network.
+$profiles = @('Private', 'Domain')
+if (@(Get-NetConnectionProfile -ErrorAction SilentlyContinue | Where-Object { [string]$_.NetworkCategory -eq 'Public' }).Count) {
+    $profiles += 'Public'
+}
 Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue |
     Remove-NetFirewallRule -ErrorAction SilentlyContinue
 New-NetFirewallRule -DisplayName $ruleName `
     -Direction Inbound -Action Allow -Protocol TCP -LocalPort $port `
-    -Profile Private, Domain | Out-Null
+    -Profile $profiles | Out-Null
 
 Start-ScheduledTask -TaskName $taskName
 

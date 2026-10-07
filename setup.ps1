@@ -173,43 +173,103 @@ function Remove-Reveille {
 
 # ------------------------------------------------------------------- node.js --
 
-function Resolve-Node {
-    $node = Get-Command node -ErrorAction SilentlyContinue
-    if ($node) {
-        $version = (& $node.Source --version).TrimStart('v')
-        if ([int]($version -split '\.')[0] -ge 20) {
-            Write-Dim "Node.js $version"
-            return $node.Source
-        }
-        Write-Warn2 "Node.js $version is too old (20 or newer needed)."
-    } else {
-        Write-Step 'Node.js is not installed. It is what runs the agent.'
+<#
+    Node.js comes with Reveille now: the download has the official node.exe in
+    it, in node\ next to the agent. Nobody installs Node, npm or winget first.
+
+    The PATH is only a fallback, for a copy someone set up by hand.
+#>
+function Get-AgentNode {
+    param([string]$Destination)
+    $bundled = Join-Path $Destination 'node\node.exe'
+    if (Test-Path $bundled) { return $bundled }
+    $onPath = Get-Command node -ErrorAction SilentlyContinue
+    if ($onPath) { return $onPath.Source }
+    return $null
+}
+
+# Which download fits this PC, or $null when none does. PROCESSOR_ARCHITEW6432
+# is set when this is 32-bit PowerShell on 64-bit Windows, and is the truth.
+function Get-AgentTarget {
+    $arch = if ($env:PROCESSOR_ARCHITEW6432) { $env:PROCESSOR_ARCHITEW6432 } else { $env:PROCESSOR_ARCHITECTURE }
+    switch ($arch) {
+        'AMD64' { return 'win-x64' }
+        'ARM64' { return 'win-arm64' }
+        default { return $null }
     }
+}
 
-    if (Get-Command winget -ErrorAction SilentlyContinue) {
-        Write-Step 'Installing Node.js via winget...'
-        winget install --id OpenJS.NodeJS.LTS --source winget --accept-package-agreements --accept-source-agreements --silent | Out-Null
+<#
+    Whether Windows Firewall lets the agent's Node in.
 
-        # winget does not refresh this session's PATH.
-        $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' +
-                    [Environment]::GetEnvironmentVariable('Path', 'User')
-        $node = Get-Command node -ErrorAction SilentlyContinue
-        if ($node) {
-            Write-Ok "Node.js installed."
-            return $node.Source
+    Windows asks the first time a program listens on the network, and makes a
+    rule from the answer. Node in a new place -- Reveille's own copy, where an
+    older install used the system one -- is a new program to the firewall, so it
+    asks again. If that prompt was closed or never seen, the phone simply times
+    out, and nothing says why. This is what says why.
+#>
+function Test-AgentFirewall {
+    param([string]$Destination)
+    $node = Get-AgentNode -Destination $Destination
+    if (-not $node) { return $true }
+    try {
+        foreach ($filter in @(Get-NetFirewallApplicationFilter -ErrorAction Stop)) {
+            if (-not $filter.Program) { continue }
+            if ([Environment]::ExpandEnvironmentVariables($filter.Program) -ine $node) { continue }
+            $rule = $filter | Get-NetFirewallRule -ErrorAction SilentlyContinue
+            if ($rule -and $rule.Enabled -eq 'True' -and $rule.Action -eq 'Allow' -and $rule.Direction -eq 'Inbound') {
+                return $true
+            }
         }
-        Write-Warn2 'Node.js was installed but this window cannot see it yet.'
-        Write-Warn2 'Close this terminal, open a new one, and run the same command again.'
-        throw 'Node.js was installed, but this session cannot see it yet.'
+    } catch {
+        # Unable to look is not the same as blocked; say nothing.
+        return $true
     }
+    return $false
+}
 
-    Write-Host ''
-    Write-Warn2 'Install Node.js first, then run this again:'
-    Write-Warn2 '  https://nodejs.org  (take the LTS download)'
-    Write-Host ''
-    # Thrown rather than exit: the window runs this in a worker, and an exit
-    # there would end the worker without a word about why.
-    throw 'Node.js is not installed and winget is not available to install it.'
+<#
+    The firewall profiles a rule should cover: home and work networks, plus
+    whatever this PC is connected to right now.
+
+    Windows calls a network Public whenever someone answered "no" to being
+    discoverable on it, which is a common answer on a home network. A rule for
+    Private only would then be a rule for some other network, and the phone
+    would time out here exactly as if there were no rule at all. The agent
+    still refuses anything from off the local network, and still wants a
+    signature, whatever the firewall lets through.
+#>
+function Get-AgentFirewallProfiles {
+    $profiles = @('Private', 'Domain')
+    foreach ($category in @(Get-NetConnectionProfile -ErrorAction SilentlyContinue | ForEach-Object { [string]$_.NetworkCategory })) {
+        if ($category -eq 'Public' -and $profiles -notcontains 'Public') { $profiles += 'Public' }
+    }
+    return $profiles
+}
+
+<#
+    Makes that rule itself, for when the prompt was missed. It needs
+    administrator, so it asks for it, once, here.
+#>
+function Add-AgentFirewallRule {
+    param([string]$Destination)
+    $node = Get-AgentNode -Destination $Destination
+    if (-not $node) { return $false }
+    $program = $node -replace "'", "''"
+    $profiles = (Get-AgentFirewallProfiles) -join ', '
+    $command = "Get-NetFirewallRule -DisplayName 'Reveille agent' -ErrorAction SilentlyContinue | Remove-NetFirewallRule -ErrorAction SilentlyContinue; " +
+               "New-NetFirewallRule -DisplayName 'Reveille agent' -Direction Inbound -Action Allow -Protocol TCP " +
+               "-Program '$program' -Profile $profiles | Out-Null"
+    Write-Step 'Allowing it through Windows Firewall needs administrator approval once...'
+    $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($command))
+    try {
+        Start-Process powershell -Verb RunAs -Wait -WindowStyle Hidden `
+            -ArgumentList '-NoProfile', '-EncodedCommand', $encoded | Out-Null
+    } catch {
+        # Saying no to the Windows prompt lands here.
+        return $false
+    }
+    return (Test-AgentFirewall -Destination $Destination)
 }
 
 # ------------------------------------------------------------------ download --
@@ -217,25 +277,48 @@ function Resolve-Node {
 function Get-AgentFiles {
     param([string]$Destination)
 
-    $zipUrl = "https://github.com/$Repo/archive/refs/heads/$Branch.zip"
+    # One file from the agent release: the agent, its packages already
+    # installed, and the official node.exe from nodejs.org, built by
+    # .github/workflows/agent.yml. Nothing else needs installing first.
+    $target = Get-AgentTarget
+    if (-not $target) {
+        throw "Reveille needs 64-bit Windows, and this PC reports '$env:PROCESSOR_ARCHITECTURE'."
+    }
+    $base = "https://github.com/$Repo/releases/download/agent"
+    $name = "reveille-agent-$target.zip"
+
     $tmp = Join-Path ([System.IO.Path]::GetTempPath()) "reveille-$([guid]::NewGuid().ToString('N'))"
     New-Item -ItemType Directory -Path $tmp -Force | Out-Null
-    $zip = Join-Path $tmp 'src.zip'
+    $zip = Join-Path $tmp $name
+    $sums = Join-Path $tmp 'SHA256SUMS'
+    $stage = Join-Path $tmp 'stage'
 
     Write-Step 'Downloading the agent...'
     $progress = $ProgressPreference
     $ProgressPreference = 'SilentlyContinue'   # the progress bar makes this 10x slower
     try {
-        Invoke-WebRequest -Uri $zipUrl -OutFile $zip -UseBasicParsing
+        Invoke-WebRequest -Uri "$base/SHA256SUMS" -OutFile $sums -UseBasicParsing
+        Invoke-WebRequest -Uri "$base/$name" -OutFile $zip -UseBasicParsing
     } finally {
         $ProgressPreference = $progress
     }
 
-    Expand-Archive -Path $zip -DestinationPath $tmp -Force
-    $source = Join-Path $tmp "PCRemote-$Branch\back-end"
-    if (-not (Test-Path $source)) {
-        throw "The download did not contain the agent. Expected $source"
+    # A program that will start at every log on is checked before it is
+    # unpacked: its fingerprint has to be the one published beside it.
+    Write-Step 'Checking the download...'
+    $want = $null
+    foreach ($line in Get-Content $sums) {
+        if ($line -match "^([0-9a-f]{64})\s+\*?$([regex]::Escape($name))$") { $want = $Matches[1] }
     }
+    $got = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
+    if (-not $want -or $got -ne $want) {
+        Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
+        throw 'The download did not match its published fingerprint, so it was not installed. Try again in a few minutes.'
+    }
+
+    Write-Step 'Unpacking it...'
+    Expand-Archive -Path $zip -DestinationPath $stage -Force
+    $build = Get-Content (Join-Path $stage 'version.json') -Raw | ConvertFrom-Json
 
     # Keep the existing token, or the phone would have to be paired again.
     $existingConfig = Join-Path $Destination 'config.json'
@@ -245,37 +328,50 @@ function Get-AgentFiles {
         Write-Dim 'keeping your existing token'
     }
 
+    $nodeDir = Join-Path $Destination 'node'
     if (Test-Path $Destination) {
-        # node_modules is re-installed below; everything else is replaceable.
-        Get-ChildItem $Destination -Force | Where-Object { $_.Name -ne 'node_modules' } |
+        # node.exe may be running -- the agent, or the lock-screen responder --
+        # and Windows will not delete a running program. It will rename one,
+        # though, so it goes aside, and the next install clears it away.
+        Get-ChildItem $nodeDir -Filter 'node.exe.old-*' -ErrorAction SilentlyContinue |
+            Remove-Item -Force -ErrorAction SilentlyContinue
+        $oldNode = Join-Path $nodeDir 'node.exe'
+        if (Test-Path $oldNode) {
+            try {
+                Remove-Item $oldNode -Force -ErrorAction Stop
+            } catch {
+                Rename-Item $oldNode ('node.exe.old-' + [DateTime]::Now.Ticks)
+            }
+        }
+        # Everything else is replaceable, apart from the pairing and the note
+        # of which update was last mentioned.
+        Get-ChildItem $Destination -Force |
+            Where-Object { $_.Name -notin @('config.json', 'update-state.json', 'node') } |
             Remove-Item -Recurse -Force
+        Get-ChildItem $nodeDir -Force -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -notlike 'node.exe.old-*' } |
+            Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
     } else {
         New-Item -ItemType Directory -Path $Destination -Force | Out-Null
     }
 
-    Copy-Item (Join-Path $source '*') $Destination -Recurse -Force
+    Get-ChildItem $stage -Force | Where-Object { $_.Name -ne 'node' } |
+        Copy-Item -Destination $Destination -Recurse -Force
+    New-Item -ItemType Directory -Path $nodeDir -Force | Out-Null
+    Get-ChildItem (Join-Path $stage 'node') -Force | Copy-Item -Destination $nodeDir -Force
 
     if ($savedConfig) {
         # No BOM: Set-Content -Encoding UTF8 adds one, and JSON.parse rejects it.
         [System.IO.File]::WriteAllText($existingConfig, $savedConfig, (New-Object System.Text.UTF8Encoding $false))
     }
 
-    # Record which commit this copy came from. The agent compares it against
-    # main to notice when the PC half has fallen behind -- it is fetched from a
-    # branch, not a release, so a commit is the only honest version it has.
-    try {
-        $head = Invoke-RestMethod "https://api.github.com/repos/$Repo/commits/$Branch" `
-            -Headers @{ 'User-Agent' = 'reveille-setup' } -TimeoutSec 10
-        $stamp = @{ sha = $head.sha; installedAt = (Get-Date).ToString('o') } | ConvertTo-Json
-        [System.IO.File]::WriteAllText(
-            (Join-Path $Destination 'installed.json'), $stamp,
-            (New-Object System.Text.UTF8Encoding $false))
-    } catch {
-        Write-Dim 'could not record the installed version (update checks will stay quiet)'
-    }
+    # Which build this is. The agent compares it with the release's
+    # version.json to notice when the PC half has fallen behind.
+    $stamp = @{ sha = $build.sha; node = $build.node; installedAt = (Get-Date).ToString('o') } | ConvertTo-Json
+    [System.IO.File]::WriteAllText((Join-Path $Destination 'installed.json'), $stamp, (New-Object System.Text.UTF8Encoding $false))
 
     Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
-    Write-Dim "installed to $Destination"
+    Write-Dim "installed to $Destination, with Node.js $($build.node)"
 }
 
 # --------------------------------------------------------------- scheduling --
@@ -456,7 +552,7 @@ function Confirm-Presence {
 # ------------------------------------------------------------- the install --
 
 <#
-    Downloads the agent, installs what it needs, registers it to start at log
+    Downloads the agent with Node.js inside it, registers it to start at log
     on, starts it, and waits for it to answer. Returns the agent's /health
     reply, or $null if it never answered.
 
@@ -467,21 +563,10 @@ function Confirm-Presence {
 function Install-Reveille {
     param([string]$Destination, [switch]$Repairing, [switch]$NoAutoStart)
 
+    # Its packages are already installed in the download, so there is no npm
+    # step any more -- the slowest part of setup, and the one most likely to
+    # fail on a machine nobody had set up for development.
     Get-AgentFiles -Destination $Destination
-
-    Write-Step 'Installing what it needs...'
-    Push-Location $Destination
-    try {
-        # npm.cmd, not npm. In PowerShell `npm` resolves to npm.ps1, and a fresh
-        # Windows install refuses to run any .ps1 at all -- "cannot be loaded
-        # because running scripts is disabled on this system". The .cmd shim does
-        # the same job and no execution policy applies to it, so the installer
-        # works on a machine whose settings have never been touched.
-        & npm.cmd install --omit=dev --no-audit --no-fund --loglevel=error 2>&1 | Out-Null
-        if ($LASTEXITCODE -ne 0) { throw 'npm install failed. Check your internet connection and try again.' }
-    } finally {
-        Pop-Location
-    }
 
     if ($NoAutoStart) {
         Write-Dim 'skipping the start-at-login step, as asked'
@@ -727,16 +812,21 @@ function Show-Menu {
 }
 
 function Show-PairingCode {
-    param([string]$Destination, [string]$NodePath)
+    param([string]$Destination)
+    $node = Get-AgentNode -Destination $Destination
+    if (-not $node) {
+        Write-Warn2 '  Node.js is missing from the install folder. Choose Repair to put it back.'
+        return
+    }
     Push-Location $Destination
-    try { & $NodePath 'pair.js' } finally { Pop-Location }
+    try { & $node 'pair.js' } finally { Pop-Location }
 }
 
 # --------------------------------------------------- execution policy --
 
 <#
-    Reveille does not need PowerShell's execution policy changed: the one thing
-    that would have tripped over it, npm, is called through npm.cmd instead.
+    Reveille does not need PowerShell's execution policy changed: nothing it
+    runs is a script file, now that npm is no longer part of installing.
 
     But the helper scripts here are .ps1 files, and a machine on the Windows
     default refuses to run those at all. Worth saying once, plainly, rather
@@ -851,11 +941,11 @@ function Get-RvStatus {
     }
     $s.PresenceRunning = [bool](Get-NetTCPConnection -LocalPort ($port + 1) -State Listen -ErrorAction SilentlyContinue)
 
-    $node = Get-Command node -ErrorAction SilentlyContinue
+    $node = Get-AgentNode -Destination $Destination
     if ($node -and (Test-Path (Join-Path $Destination 'pair.js'))) {
         Push-Location $Destination
         try {
-            $raw = (& $node.Source 'pair.js' '--json' 2>$null) -join "`n"
+            $raw = (& $node 'pair.js' '--json' 2>$null) -join "`n"
         } finally {
             Pop-Location
         }
@@ -875,13 +965,20 @@ function Get-RvStatus {
         try { $s.Sha = (Get-Content $stamp -Raw | ConvertFrom-Json).sha } catch { }
     }
     if ($s.Sha) {
+        # The release's version.json names the build that is current. Not the
+        # newest commit on main: most commits never touch the agent.
         try {
-            $compare = Invoke-RestMethod "https://api.github.com/repos/$Repo/compare/$($s.Sha)...$Branch" `
-                -Headers @{ 'User-Agent' = 'reveille-setup' } -TimeoutSec 8
-            $s.Ahead = [int]$compare.ahead_by
-            $s.Compared = $true
+            $raw = (Invoke-WebRequest "https://github.com/$Repo/releases/download/agent/version.json" `
+                -Headers @{ 'User-Agent' = 'reveille-setup' } -TimeoutSec 8 -UseBasicParsing).Content
+            if ($raw -is [byte[]]) { $raw = [Text.Encoding]::UTF8.GetString($raw) }
+            $latest = ($raw | ConvertFrom-Json).sha
+            if ($latest) {
+                $s.Ahead = [int]($latest -ne $s.Sha)
+                $s.Compared = $true
+            }
         } catch { }
     }
+    $s.Firewall = Test-AgentFirewall -Destination $Destination
     return $s
 }
 
@@ -891,17 +988,10 @@ function Get-RvStatus {
 #>
 function Get-RvChecks {
     $ErrorActionPreference = 'Continue'
-    $r = @{ Windows = 'Windows'; NodeVersion = $null; NodeOk = $false; Winget = $false
-            Adapter = $null; Ip = $null; Port = (Read-AgentPort -Destination $InstallDir); PortOwner = $null; PortOurs = $false }
+    $r = @{ Windows = 'Windows'; Target = (Get-AgentTarget); Adapter = $null; Ip = $null
+            Port = (Read-AgentPort -Destination $InstallDir); PortOwner = $null; PortOurs = $false }
 
     try { $r.Windows = (Get-CimInstance Win32_OperatingSystem).Caption -replace '^Microsoft\s+', '' } catch { }
-
-    $node = Get-Command node -ErrorAction SilentlyContinue
-    if ($node) {
-        try { $r.NodeVersion = "$(& $node.Source --version)".Trim().TrimStart('v') } catch { }
-    }
-    if ($r.NodeVersion) { $r.NodeOk = [int](($r.NodeVersion -split '\.')[0]) -ge 20 }
-    $r.Winget = [bool](Get-Command winget -ErrorAction SilentlyContinue)
 
     $net = Get-NetIPConfiguration -ErrorAction SilentlyContinue |
         Where-Object { $_.IPv4DefaultGateway -and $_.NetAdapter.Status -eq 'Up' } | Select-Object -First 1
@@ -926,7 +1016,7 @@ function Get-RvChecks {
     straight from PowerShell with nothing extra to download, the same way
     Housecall's is -- close it and nothing is left running.
 
-    Anything slow (downloading, npm, asking Windows for administrator) runs in
+    Anything slow (downloading, asking Windows for administrator) runs in
     one worker runspace, so the window keeps painting. The worker gets this
     script's own functions, so the window and the terminal run exactly the
     same steps; each Write-Step the worker prints becomes a line of the
@@ -969,7 +1059,7 @@ $script:RvStrings = @{
         lockMetaOn = 'Port {0} \u00b7 answers before sign-in'; lockMetaOff = 'Can be turned on under Permissions.'
         bios = 'Reboot to BIOS'; allowed = 'Allowed'; biosMeta = 'One scheduled task, nothing more'
         biosLegacy = 'Not possible'; biosLegacyMeta = 'This PC starts in legacy BIOS mode.'
-        version = 'Version'; upToDate = 'Up to date'; updAvail = '{0} changes available'; updOne = '1 change available'
+        version = 'Version'; upToDate = 'Up to date'; updAvail = 'Update available'; updOne = 'Update available'
         verUnknown = 'Unknown'; verMeta = 'Installed from {0}'; verMetaNone = 'No version recorded. Update records one.'
         verOffline = 'Installed from {0} \u00b7 GitHub could not be reached to compare'
         network = 'NETWORK'; adapter = 'Adapter'; ip = 'Address'; macH = 'MAC'; primary = 'Used for waking'; other = 'Other'
@@ -992,7 +1082,7 @@ $script:RvStrings = @{
 
         maintTitle = 'Maintenance'; maintSub = 'Everything the one-line command used to ask about in a menu.'
         update = 'Update'; updateDesc = '{0} changes since this copy was installed. Keeps the pairing code, so paired phones keep working.'
-        updateDescOne = '1 change since this copy was installed. Keeps the pairing code, so paired phones keep working.'
+        updateDescOne = 'A newer version is ready. Updating keeps the pairing code, so paired phones keep working.'
         updateDescNone = 'This copy is up to date. Running it anyway reinstalls the newest version and keeps the pairing code.'
         repair = 'Repair'; repairDesc = 'Reinstalls, re-registers and restarts the agent. Use it when the app can\u2019t reach this PC.'
         rotate = 'New pairing code'; rotateBtn = 'Replace'
@@ -1004,7 +1094,7 @@ $script:RvStrings = @{
         cmdHint = 'Next time, type **reveille** in PowerShell to open this window.'
         doneUpdate = 'Updated. Paired phones keep working.'; doneRepair = 'Repaired. The agent is answering again.'
         doneRotate = 'New pairing code issued. Scan it again on every phone.'; doneRemove = 'Reveille was removed from this PC.'
-        noAnswer = 'The agent did not answer. Try Repair. If that fails too, run node src/index.js in {0} to see why.'
+        noAnswer = 'The agent did not answer. Try Repair. If that fails too, run node/node.exe src/index.js in {0} to see why.'
         failed = 'That did not work: {0}'; busyClose = 'Wait for this to finish before closing.'
         wUpdate = 'Updating'; wRepair = 'Repairing'; wRotate = 'Issuing a new pairing code'; wRemove = 'Removing Reveille'
 
@@ -1015,15 +1105,15 @@ $script:RvStrings = @{
         haveIt = 'I have the app \u2014 continue'
         checkTitle = 'Checking this PC'; checkSub = 'Nothing has been changed yet. This only looks.'
         checking = 'Looking\u2026'
-        nodeName = 'Node.js {0}'; nodeNone = 'Node.js'
-        nodeOk = 'already installed'; nodeOld = 'too old \u2014 a newer one is installed with winget'
-        nodeWinget = 'not installed yet \u2014 it is installed with winget'
-        nodeBlocked = 'not installed, and this PC has no winget to install it. Install the LTS version from nodejs.org, then check again.'
+        archBad = 'Reveille needs 64-bit Windows.'
+        downloadName = 'Download'; downloadSize = 'about 35 MB \u00b7 Node.js included, nothing else to install'
         networkName = 'Network'; noNetwork = 'not connected. Connect Wi-Fi or Ethernet, then check again.'
         portName = 'Port {0}'; portFree = 'free'; portHeld = 'in use by {0} \u2014 it will be stopped'
         portOwn = 'in use by an older copy \u2014 it will be replaced'
         checkAgain = 'Check again'; installBtn = 'Install'
-        installTitle = 'Installing'; installSub = 'About half a minute. No administrator needed for any of this.'
+        installTitle = 'Installing'; installSub = 'About a minute, most of it the download. Windows may then ask whether Node.js may use the network: choose Allow.'
+        fwMissing = 'Windows Firewall is not letting Reveille in yet, so your phone cannot reach this PC. Windows asks the first time the agent starts; if that question was closed or missed, allow it here.'
+        fwAllow = 'Allow through the firewall'; fwDone = 'Reveille is allowed through Windows Firewall.'
         installDone = 'Installed, and answering on port {0}.'
         installFailed = 'The install stopped: {0}'; tryAgain = 'Try again'
         next = 'Continue'; back = 'Back'
@@ -1064,7 +1154,7 @@ $script:RvStrings = @{
         lockMetaOn = 'Poort {0} \u00b7 antwoordt v\u00f3\u00f3r het inloggen'; lockMetaOff = 'Kan aangezet worden onder Toestemmingen.'
         bios = 'Herstarten naar BIOS'; allowed = 'Toegestaan'; biosMeta = 'E\u00e9n geplande taak, verder niets'
         biosLegacy = 'Niet mogelijk'; biosLegacyMeta = 'Deze pc start in de oude BIOS-modus.'
-        version = 'Versie'; upToDate = 'Bijgewerkt'; updAvail = '{0} wijzigingen beschikbaar'; updOne = '1 wijziging beschikbaar'
+        version = 'Versie'; upToDate = 'Bijgewerkt'; updAvail = 'Update beschikbaar'; updOne = 'Update beschikbaar'
         verUnknown = 'Onbekend'; verMeta = 'Ge\u00efnstalleerd vanaf {0}'; verMetaNone = 'Geen versie bekend. Bijwerken legt er een vast.'
         verOffline = 'Ge\u00efnstalleerd vanaf {0} \u00b7 GitHub was niet bereikbaar om te vergelijken'
         network = 'NETWERK'; adapter = 'Adapter'; ip = 'Adres'; macH = 'MAC'; primary = 'Gebruikt om te wekken'; other = 'Overig'
@@ -1087,7 +1177,7 @@ $script:RvStrings = @{
 
         maintTitle = 'Onderhoud'; maintSub = 'Alles wat het eenregelige commando vroeger in een menu vroeg.'
         update = 'Bijwerken'; updateDesc = '{0} wijzigingen sinds deze kopie is ge\u00efnstalleerd. De koppelcode blijft, dus gekoppelde telefoons blijven werken.'
-        updateDescOne = '1 wijziging sinds deze kopie is ge\u00efnstalleerd. De koppelcode blijft, dus gekoppelde telefoons blijven werken.'
+        updateDescOne = 'Er is een nieuwere versie. Bijwerken houdt de koppelcode, dus gekoppelde telefoons blijven werken.'
         updateDescNone = 'Deze kopie is bijgewerkt. Toch uitvoeren installeert de nieuwste versie opnieuw en houdt de koppelcode.'
         repair = 'Repareren'; repairDesc = 'Installeert, registreert en start de agent opnieuw. Gebruik dit als de app deze pc niet bereikt.'
         rotate = 'Nieuwe koppelcode'; rotateBtn = 'Vervangen'
@@ -1099,7 +1189,7 @@ $script:RvStrings = @{
         cmdHint = 'Typ de volgende keer **reveille** in PowerShell om dit venster te openen.'
         doneUpdate = 'Bijgewerkt. Gekoppelde telefoons blijven werken.'; doneRepair = 'Gerepareerd. De agent antwoordt weer.'
         doneRotate = 'Nieuwe koppelcode uitgegeven. Scan hem opnieuw op elke telefoon.'; doneRemove = 'Reveille is van deze pc verwijderd.'
-        noAnswer = 'De agent antwoordde niet. Probeer Repareren. Lukt dat ook niet, voer dan node src/index.js uit in {0} om te zien waarom.'
+        noAnswer = 'De agent antwoordde niet. Probeer Repareren. Lukt dat ook niet, voer dan node/node.exe src/index.js uit in {0} om te zien waarom.'
         failed = 'Dat lukte niet: {0}'; busyClose = 'Wacht tot dit klaar is voordat je sluit.'
         wUpdate = 'Bijwerken'; wRepair = 'Repareren'; wRotate = 'Nieuwe koppelcode uitgeven'; wRemove = 'Reveille verwijderen'
 
@@ -1110,15 +1200,15 @@ $script:RvStrings = @{
         haveIt = 'Ik heb de app \u2014 verder'
         checkTitle = 'Deze pc controleren'; checkSub = 'Er is nog niets veranderd. Dit kijkt alleen.'
         checking = 'Kijken\u2026'
-        nodeName = 'Node.js {0}'; nodeNone = 'Node.js'
-        nodeOk = 'al ge\u00efnstalleerd'; nodeOld = 'te oud \u2014 een nieuwere wordt ge\u00efnstalleerd met winget'
-        nodeWinget = 'nog niet ge\u00efnstalleerd \u2014 wordt ge\u00efnstalleerd met winget'
-        nodeBlocked = 'niet ge\u00efnstalleerd, en deze pc heeft geen winget om het te installeren. Installeer de LTS-versie van nodejs.org en controleer dan opnieuw.'
+        archBad = 'Reveille heeft 64-bits Windows nodig.'
+        downloadName = 'Download'; downloadSize = 'ongeveer 35 MB \u00b7 Node.js zit erin, verder niets te installeren'
         networkName = 'Netwerk'; noNetwork = 'geen verbinding. Maak verbinding met wifi of ethernet en controleer dan opnieuw.'
         portName = 'Poort {0}'; portFree = 'vrij'; portHeld = 'in gebruik door {0} \u2014 wordt gestopt'
         portOwn = 'in gebruik door een oudere kopie \u2014 wordt vervangen'
         checkAgain = 'Opnieuw controleren'; installBtn = 'Installeren'
-        installTitle = 'Bezig met installeren'; installSub = 'Ongeveer een halve minuut. Hiervoor zijn geen beheerdersrechten nodig.'
+        installTitle = 'Bezig met installeren'; installSub = 'Ongeveer een minuut, vooral de download. Daarna vraagt Windows misschien of Node.js het netwerk mag gebruiken: kies Toestaan.'
+        fwMissing = 'Windows Firewall laat Reveille nog niet door, dus je telefoon kan deze pc niet bereiken. Windows vraagt het de eerste keer dat de agent start; is die vraag weggeklikt of gemist, sta het dan hier toe.'
+        fwAllow = 'Toestaan in de firewall'; fwDone = 'Reveille wordt doorgelaten door Windows Firewall.'
         installDone = 'Ge\u00efnstalleerd, en antwoordt op poort {0}.'
         installFailed = 'De installatie stopte: {0}'; tryAgain = 'Opnieuw proberen'
         next = 'Verder'; back = 'Terug'
@@ -1135,14 +1225,13 @@ $script:RvStrings = @{
 # what they say in Dutch. Anything not here is shown as it is.
 $script:RvLogNl = @{
     'Downloading the agent...' = 'De agent downloaden\u2026'
-    'Installing what it needs...' = 'Installeren wat nodig is\u2026'
+    'Checking the download...' = 'De download controleren\u2026'
+    'Unpacking it...' = 'Uitpakken\u2026'
+    'Allowing it through Windows Firewall needs administrator approval once...' = 'Toestaan in Windows Firewall vraagt \u00e9\u00e9n keer om beheerdersrechten\u2026'
     'Setting it to start with Windows...' = 'Laten starten met Windows\u2026'
     'Re-registering the start-at-login task...' = 'De starttaak opnieuw registreren\u2026'
     'Starting the agent...' = 'De agent starten\u2026'
     'Waiting for it to answer...' = 'Wachten tot hij antwoordt\u2026'
-    'Node.js is not installed. It is what runs the agent.' = 'Node.js is niet ge\u00efnstalleerd; dat is wat de agent draait.'
-    'Installing Node.js via winget...' = 'Node.js installeren via winget\u2026'
-    'Node.js installed.' = 'Node.js ge\u00efnstalleerd.'
     'keeping your existing token' = 'je bestaande koppelcode blijft'
     'starts automatically when you log in' = 'start vanzelf als je inlogt'
     'type reveille in PowerShell to open this again' = 'typ reveille in PowerShell om dit weer te openen'
@@ -1162,9 +1251,9 @@ $script:RvLogNl = @{
 
 # How far along the install is when each step starts.
 $script:RvProgress = @{
-    'Installing Node.js via winget...' = 0.05
-    'Downloading the agent...' = 0.12
-    'Installing what it needs...' = 0.35
+    'Downloading the agent...' = 0.1
+    'Checking the download...' = 0.45
+    'Unpacking it...' = 0.55
     'Setting it to start with Windows...' = 0.7
     'Re-registering the start-at-login task...' = 0.7
     'Starting the agent...' = 0.8
@@ -1316,7 +1405,8 @@ $script:RvAppQr = @(
 # however this script arrived -- a file, or irm | iex with no file at all.
 $script:RvWorkerFunctions = @(
     'Write-Step', 'Write-Ok', 'Write-Warn2', 'Write-Dim',
-    'Resolve-Node', 'Get-AgentFiles', 'Register-Agent', 'Install-FirmwareTask', 'Test-Uefi',
+    'Get-AgentNode', 'Get-AgentTarget', 'Test-AgentFirewall', 'Get-AgentFirewallProfiles', 'Add-AgentFirewallRule',
+    'Get-AgentFiles', 'Register-Agent', 'Install-FirmwareTask', 'Test-Uefi',
     'Install-PresenceTask', 'Install-Reveille', 'Remove-AdminTask', 'Stop-WhateverHoldsThePort',
     'Read-AgentPort', 'Test-Agent', 'Invoke-TokenReset', 'Remove-Reveille',
     'Install-ReveilleCommand', 'Remove-ReveilleCommand', 'Get-RvStatus', 'Get-RvChecks'
@@ -1342,24 +1432,22 @@ $script:RvWorkerScript = {
         'status' { Get-RvStatus -Destination $InstallDir }
         'check'  { Get-RvChecks }
         'install' {
-            $null = Resolve-Node
             $health = Install-Reveille -Destination $InstallDir
             $null = Install-ReveilleCommand
             @{ Health = $health }
         }
         'update' {
-            $null = Resolve-Node
             $health = Install-Reveille -Destination $InstallDir
             $null = Install-ReveilleCommand
             @{ Health = $health }
         }
         'repair' {
-            $null = Resolve-Node
             $health = Install-Reveille -Destination $InstallDir -Repairing
             $null = Install-ReveilleCommand
             @{ Health = $health }
         }
         'rotate' { @{ Ok = [bool](Invoke-TokenReset -Destination $InstallDir) } }
+        'firewall' { @{ Ok = [bool](Add-AgentFirewallRule -Destination $InstallDir) } }
         'remove' {
             # The two extras were made as administrator; removing them asks
             # Windows once each. Saying no leaves them, and says so.
@@ -1417,7 +1505,7 @@ function Start-RvJob {
 
 # The jobs that change something. Closing the window waits for these, and
 # their buttons are greyed out while one runs.
-$script:RvHeavyJobs = @('install', 'update', 'repair', 'rotate', 'remove', 'perm', 'extras')
+$script:RvHeavyJobs = @('install', 'update', 'repair', 'rotate', 'remove', 'perm', 'extras', 'firewall')
 
 function Test-RvBusy {
     $w = $script:RvWin
@@ -2232,11 +2320,26 @@ function Add-RvPairBlock {
     [void]$Panel.Children.Add((New-RvNote (RvT 'tokenWarn') 'warn' -Margin @(0, 14, 0, 0)))
 }
 
+# Shown wherever it matters while the firewall is not letting the agent in:
+# the phone just times out otherwise, and nothing on it can say why.
+function Add-RvFirewallNote {
+    param($Panel)
+    $w = $script:RvWin
+    if (-not $w.Status -or $w.Status.Firewall -ne $false) { return }
+    $box = New-RvStack
+    [void]$box.Children.Add((New-RvText (RvT 'fwMissing') -Size 12.5 -Brush 'Amber'))
+    $button = New-RvButton (RvT 'fwAllow') @{ Do = 'firewall' } 'RvBtn' -Margin @(0, 10, 0, 0) -Disabled:(Test-RvBusy)
+    $button.HorizontalAlignment = 'Left'
+    [void]$box.Children.Add($button)
+    [void]$Panel.Children.Add((New-RvBox $box -Bg 'AmberSoft' -Line '' -Thick @(0) -Radius 10 -Padding @(14, 12) -Margin @(0, 0, 0, 16)))
+}
+
 function Add-RvPairView {
     param($Panel)
     $w = $script:RvWin
     $refresh = New-RvButton (RvT 'refresh') @{ Do = 'refresh' } 'RvSmall'
     Add-RvHeader $Panel (RvT 'pairTitle') (RvT 'pairSub') $refresh
+    Add-RvFirewallNote $Panel
     Add-RvPairBlock $Panel
     $pair = if ($w.Status) { $w.Status.Pair } else { $null }
     if ($pair -and $pair.ip) {
@@ -2276,6 +2379,7 @@ function Add-RvPcView {
     $w = $script:RvWin
     $s = $w.Status
     Add-RvHeader $Panel (RvT 'pcTitle') (RvT 'pcSub') (New-RvButton (RvT 'refresh') @{ Do = 'refresh' } 'RvSmall')
+    Add-RvFirewallNote $Panel
     if (-not $s) {
         [void]$Panel.Children.Add((New-RvText (RvT 'checking') -Brush 'Ink2'))
         return
@@ -2523,11 +2627,9 @@ function Add-RvStepView {
                 return
             }
             $rows = @()
-            $rows += , @('ok', $c.Windows, '')
-            if ($c.NodeOk) { $rows += , @('ok', (RvT 'nodeName' $c.NodeVersion), (RvT 'nodeOk')) }
-            elseif ($c.Winget -and $c.NodeVersion) { $rows += , @('info', (RvT 'nodeName' $c.NodeVersion), (RvT 'nodeOld')) }
-            elseif ($c.Winget) { $rows += , @('info', (RvT 'nodeNone'), (RvT 'nodeWinget')) }
-            else { $rows += , @('bad', (RvT 'nodeNone'), (RvT 'nodeBlocked')) }
+            if ($c.Target) { $rows += , @('ok', $c.Windows, '') }
+            else { $rows += , @('bad', $c.Windows, (RvT 'archBad')) }
+            $rows += , @('ok', (RvT 'downloadName'), (RvT 'downloadSize'))
             if ($c.Ip) { $rows += , @('ok', (RvT 'networkName'), "$($c.Adapter) $([char]0x00B7) $($c.Ip)") }
             else { $rows += , @('bad', (RvT 'networkName'), (RvT 'noNetwork')) }
             if (-not $c.PortOwner) { $rows += , @('ok', (RvT 'portName' $c.Port), (RvT 'portFree')) }
@@ -2595,6 +2697,7 @@ function Add-RvStepView {
         }
         5 {
             Add-RvHeader $Panel (RvT 'pairNow') (RvT 'pairNowSub')
+            Add-RvFirewallNote $Panel
             Add-RvPairBlock $Panel -PairingOnly
             [void]$Panel.Children.Add((New-RvNote (RvT 'cmdHint') 'info' -Margin @(0, 14, 0, 0)))
             [void]$Panel.Children.Add((New-RvRow @((New-RvButton (RvT 'back') @{ Do = 'step'; Step = 4 }),
@@ -2627,6 +2730,12 @@ function Invoke-RvClick {
             'step'    { $w.Step = $t.Step; $w.Notice = $null; Update-RvAll }
             'check'   { $w.Checks = $null; Add-RvJob @{ Kind = 'check'; Done = 'Complete-RvChecks' }; Update-RvContent }
             'install' { Start-RvInstall }
+            'firewall' {
+                Clear-RvLog
+                $w.Notice = @{ Kind = 'info'; Text = (RvT 'permAsk') }
+                Add-RvJob @{ Kind = 'firewall'; Live = $true; Done = 'Complete-RvFirewall' }
+                Update-RvContent
+            }
             'extras'  { Start-RvExtras }
             'finish'  { $w.Mode = 'installed'; $w.View = 'pc'; $w.Notice = $null; Update-RvAll; Request-RvStatus }
         }
@@ -2746,6 +2855,16 @@ function Complete-RvPerm {
     if ($w.Status -and $Result) {
         if ($Job.Arg.Which -eq 'bios') { $w.Status.Firmware = $Result.On } else { $w.Status.Presence = $Result.On }
     }
+    Request-RvStatus
+    Update-RvAll
+}
+
+function Complete-RvFirewall {
+    param([hashtable]$Job, $Result, [string]$ErrorText)
+    $w = $script:RvWin
+    if ($ErrorText) { $w.Notice = @{ Kind = 'bad'; Text = (RvT 'failed' $ErrorText) } }
+    elseif ($Result -and $Result.Ok) { $w.Notice = @{ Kind = 'ok'; Text = (RvT 'fwDone') }; if ($w.Status) { $w.Status.Firewall = $true } }
+    else { $w.Notice = @{ Kind = 'warn'; Text = (RvT 'permDenied') } }
     Request-RvStatus
     Update-RvAll
 }
@@ -2904,20 +3023,12 @@ if (-not $Console -and -not $scripted -and (Test-RvWindowPossible)) {
 
 Write-Banner
 
-try {
-    $nodePath = Resolve-Node
-} catch {
-    # Resolve-Node has already said why, in the terminal's own words.
-    exit 1
-}
-
 # An existing install and no flags means the user typed the one-line command
 # again on purpose. Ask what they want rather than assuming.
 #
-# node_modules, not package.json: the files are copied into place before npm
-# runs, so a run that died during npm leaves a folder that looks installed but
-# cannot start. Offering that person a menu is the wrong answer -- they just
-# want the install to finish, so fall through and finish it.
+# Both, because a run that died while unpacking can leave one without the
+# other: a folder that looks installed but cannot start. Offering that person a
+# menu is the wrong answer -- they just want the install to finish.
 $alreadyInstalled = (Test-Path (Join-Path $InstallDir 'package.json')) -and
                     (Test-Path (Join-Path $InstallDir 'node_modules'))
 $repairing = $false
@@ -2927,10 +3038,10 @@ if ($alreadyInstalled -and -not $Firmware -and -not $NoAutoStart -and
     switch (Show-Menu -Destination $InstallDir) {
         'quit'   { Write-Host ''; return }
         'remove' { Invoke-Uninstall; return }
-        'pair'   { Show-PairingCode -Destination $InstallDir -NodePath $nodePath; return }
+        'pair'   { Show-PairingCode -Destination $InstallDir; return }
         'rotate' {
             if (Reset-Token -Destination $InstallDir) {
-                Show-PairingCode -Destination $InstallDir -NodePath $nodePath
+                Show-PairingCode -Destination $InstallDir
             }
             return
         }
@@ -2938,11 +3049,18 @@ if ($alreadyInstalled -and -not $Firmware -and -not $NoAutoStart -and
         'update' { Write-Host '' }
     }
 }
-$health = Install-Reveille -Destination $InstallDir -Repairing:$repairing -NoAutoStart:$NoAutoStart
+try {
+    $health = Install-Reveille -Destination $InstallDir -Repairing:$repairing -NoAutoStart:$NoAutoStart
+} catch {
+    Write-Host ''
+    Write-Warn2 "The install stopped: $($_.Exception.Message)"
+    Write-Host ''
+    exit 1
+}
 if (-not $health) {
     Write-Host ''
     Write-Warn2 'The agent did not answer. Something is wrong.'
-    Write-Warn2 "Run this to see why:  cd `"$InstallDir`"; node src\index.js"
+    Write-Warn2 "Run this to see why:  cd `"$InstallDir`"; .\node\node.exe src\index.js"
     Write-Host ''
     exit 1
 }
@@ -2971,8 +3089,7 @@ if ($LockScreen) {
 
 # Windows Firewall prompts on first listen; if it was dismissed, say so rather
 # than letting the phone fail with a silent timeout.
-$blocked = -not (Get-NetFirewallRule -ErrorAction SilentlyContinue |
-    Where-Object { $_.DisplayName -match 'node' -and $_.Enabled -eq 'True' -and $_.Action -eq 'Allow' -and $_.Direction -eq 'Inbound' })
+$blocked = -not (Test-AgentFirewall -Destination $InstallDir)
 
 Write-Host ''
 Write-Ok "Done. $($health.hostname) is ready."
@@ -2984,8 +3101,12 @@ foreach ($i in $health.interfaces) {
 Write-Host ''
 
 if ($blocked) {
-    Write-Warn2 'Windows Firewall has no rule allowing Node.js in. If the phone'
-    Write-Warn2 'cannot connect, allow it when Windows asks, or add it manually.'
+    Write-Warn2 'Windows Firewall has no rule letting Reveille in yet, so the phone'
+    Write-Warn2 'cannot reach this PC. Allow Node.js when Windows asks, or say yes here:'
+    if ((Read-Host '  Add the firewall rule now? (y/N)') -match '^\s*(y|yes|j|ja)\s*$') {
+        if (Add-AgentFirewallRule -Destination $InstallDir) { Write-Ok '  Allowed.' }
+        else { Write-Warn2 '  Not added. Windows did not get permission.' }
+    }
     Write-Host ''
 }
 
@@ -3006,12 +3127,11 @@ if ($hasCommand) {
     Write-Dim '  reveille'
 } else {
     Write-Host '  To show the pairing code again later:' -ForegroundColor White
-    Write-Dim "  cd `"$InstallDir`"; node pair.js"
+    Write-Dim "  cd `"$InstallDir`"; .\node\node.exe pair.js"
 }
 Write-Host ''
 
 if (-not $NoPair) {
     Write-Step 'Opening the pairing code...'
-    Push-Location $InstallDir
-    try { & $nodePath 'pair.js' } finally { Pop-Location }
+    Show-PairingCode -Destination $InstallDir
 }
