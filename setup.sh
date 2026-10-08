@@ -29,8 +29,9 @@ case "$(uname -s)-$(uname -m)" in
   *) echo "Reveille has no download for $(uname -s) on $(uname -m)." >&2; exit 1 ;;
 esac
 
-# The Node that came with Reveille.
-NODE="$INSTALL_DIR/node/node"
+# The Node that came with Reveille, named reveille so that is what Activity
+# Monitor and ps show.
+NODE="$INSTALL_DIR/reveille"
 
 # ------------------------------------------------------------------ output --
 
@@ -114,7 +115,7 @@ get_files() {
   sha="$(sed -n 's/.*"sha"[[:space:]]*:[[:space:]]*"\([0-9a-f]\{40\}\)".*/\1/p' "$INSTALL_DIR/version.json" | head -1)"
   printf '{"sha":"%s","installedAt":"%s"}\n' "$sha" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$INSTALL_DIR/installed.json"
 
-  dim "installed to $INSTALL_DIR, with Node.js $("$NODE" --version)"
+  dim "installed to $INSTALL_DIR"
 }
 
 # --------------------------------------------------------------- autostart --
@@ -324,5 +325,5 @@ printf '\n'
 ( cd "$INSTALL_DIR" && "$NODE" pair.js )
 printf '\n'
 printf '  %sTo show the pairing code again later:%s\n' "$C_BOLD" "$C_OFF"
-dim "  cd '$INSTALL_DIR'; ./node/node pair.js"
+dim "  cd '$INSTALL_DIR'; ./reveille pair.js"
 printf '\n'

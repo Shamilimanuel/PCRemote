@@ -60,16 +60,23 @@ for spec in win-x64:zip win-arm64:zip darwin-arm64:tar.gz darwin-x64:tar.gz linu
 
   pkg="$work/pkg-$target"
   cp -R "$app" "$pkg"
-  mkdir -p "$pkg/node" "$work/x-$target"
+  mkdir -p "$pkg/licenses" "$work/x-$target"
+  # Node, renamed reveille(.exe), so that what people see in Task Manager's
+  # Details, in Activity Monitor and in their firewall rules is Reveille.
+  # Renaming leaves the OpenJS Foundation's signature intact -- a signature
+  # covers the contents, not the name -- so Smart App Control still lets it
+  # run. Changing what is inside (its description, its publisher) would break
+  # the signature, so Task Manager's Processes tab still calls it Node.js.
   if [ "$ext" = zip ]; then
     unzip -q "$work/$file" -d "$work/x-$target"
-    cp "$work/x-$target/node-$version-$target/node.exe" "$pkg/node/"
+    cp "$work/x-$target/node-$version-$target/node.exe" "$pkg/reveille.exe"
   else
     tar -xf "$work/$file" -C "$work/x-$target"
-    cp "$work/x-$target/node-$version-$target/bin/node" "$pkg/node/"
+    cp "$work/x-$target/node-$version-$target/bin/node" "$pkg/reveille"
+    chmod +x "$pkg/reveille"
   fi
   # Node's licence travels with Node, as its licence asks.
-  cp "$work/x-$target/node-$version-$target/LICENSE" "$pkg/node/LICENSE"
+  cp "$work/x-$target/node-$version-$target/LICENSE" "$pkg/licenses/node.txt"
 
   printf '{\n  "sha": "%s",\n  "node": "%s",\n  "target": "%s",\n  "builtAt": "%s"\n}\n' \
     "$sha" "$version" "$target" "$built" > "$pkg/version.json"

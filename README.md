@@ -158,15 +158,24 @@ official Node.js from nodejs.org, checked against Node's own published
 checksums. The installer checks the download against the fingerprints published
 next to it before unpacking anything.
 
+Node is shipped renamed: `reveille.exe` on Windows, `reveille` on macOS and Linux,
+so that is the name in Task Manager's Details tab, Activity Monitor and the firewall
+rule. Renaming leaves the OpenJS Foundation's signature intact. What is *inside* the
+file — its description and publisher — cannot change without breaking that signature,
+so Task Manager's Processes tab still says "Node.js JavaScript Runtime". Node's licence
+is in `licenses/node.txt`.
+
 It is Node rather than a single compiled program for a reason that has nothing
 to do with code. Windows 11's **Smart App Control** blocks programs that are
 neither signed nor already known to Microsoft. Node's own `node.exe` is signed
 by the OpenJS Foundation, so it runs; a program compiled for this project would
 be unsigned, and blocked on every PC that has Smart App Control switched on.
 
-The first time the agent starts, Windows Firewall asks whether Node.js may use
-the network. Say **Allow**. If that question was missed, the setup window shows
-a warning with a button that adds the rule instead.
+Before the agent first starts, the installer asks Windows once for permission to
+add a firewall rule named **Reveille**, so the phone can reach the PC. Saying no
+there leaves Windows' own question to fall back on — which names the program
+inside, Node.js. If both are missed, the setup window shows a warning with a
+button that adds the rule.
 
 ### Doing it by hand instead
 

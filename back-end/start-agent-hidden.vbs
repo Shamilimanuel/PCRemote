@@ -11,10 +11,12 @@ Set fso = CreateObject("Scripting.FileSystemObject")
 here = fso.GetParentFolderName(WScript.ScriptFullName)
 entry = fso.BuildPath(here, "src\index.js")
 
-' The copy of Node that came with Reveille, when there is one: the installer
-' ships it, so nobody has to install Node.js themselves. A copy set up by hand
-' falls back to whatever node is on the PATH.
-nodeExe = fso.BuildPath(here, "node\node.exe")
+' Reveille's own copy of Node, which the installer ships as reveille.exe, so
+' nobody has to install Node.js themselves. node\node.exe is where an install
+' from before the rename kept it, and a copy set up by hand falls back to
+' whatever node is on the PATH.
+nodeExe = fso.BuildPath(here, "reveille.exe")
+If Not fso.FileExists(nodeExe) Then nodeExe = fso.BuildPath(here, "node\node.exe")
 If Not fso.FileExists(nodeExe) Then nodeExe = "node.exe"
 
 shell.CurrentDirectory = here
