@@ -10,6 +10,8 @@ on:
     paths:
       - "setup.ps1"
       - "tools/app-qr.js"
+      - "tools/window-icon.py"
+      - "front-end/assets/icon.png"
       - ".github/workflows/setup.yml"
   pull_request:
     paths:
@@ -49,3 +51,8 @@ jobs:
 
       - name: The window's app code is the download link
         run: node tools/app-qr.js --check
+
+      - name: The window's icon is the app's icon
+        run: |
+          python -m pip install --quiet pillow
+          python tools/window-icon.py --check
