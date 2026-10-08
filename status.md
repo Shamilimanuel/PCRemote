@@ -1,7 +1,7 @@
 # Reveille — status and checklist
 
 Working notes, kept so a new chat can pick up without re-deriving anything.
-Last updated: **8 October 2026**, at **v1.0.22**.
+Last updated: **8 October 2026**, at **v1.0.23**.
 
 **How we work this list:** items are worked top to bottom. Pick one, say the
 name, and it gets built. When it is done it moves to *Recently done* and we go
@@ -25,7 +25,7 @@ four screenshots from the phone, which unblock the IzzyOnDroid listing. See
 
 | | |
 |---|---|
-| Version | **1.0.22** (versionCode 10022) |
+| Version | **1.0.23** (versionCode 10023) |
 | Repo | `github.com/Shamilimanuel/PCRemote` (public, MIT) |
 | Install (Windows) | `irm github.com/Shamilimanuel/PCRemote/raw/main/setup.ps1 \| iex` — opens the setup window |
 | Open it again | type `reveille` in PowerShell (made by the installer) |
@@ -202,13 +202,14 @@ Open items only, in the order I would do them. Anything finished has moved to
   Pi, Home Assistant, or an old phone. Asked for on 8 October; not designed yet.
 
 
-- [ ] **Try the v1.0.22 tools on the phone** ← first thing next time
-  Built, type-checked and tested against a real agent, but never run on a
-  phone. Worth a few minutes each: drag the volume bar (smooth? lands where
-  you let go?), type a message (does the keyboard cover the box?), the screen
-  view (refresh rate, tap to zoom), a schedule two minutes ahead with Cancel
-  ready, and "when it's finished" with a short wait. The PC needs updating
-  first: `reveille`, then Maintenance › Update.
+- [ ] **Retest the v1.0.23 fixes, and try the timers** ← first thing next time
+  The first phone test (8 Oct, checklist at
+  https://claude.ai/artifact/LJxdzr67rXGFfcdKE5iGyb) passed 13 of 25 and found
+  six real problems, all fixed in 1.0.23 — see *Recently done*. Still never
+  tried by a person: **the timers** (when-it's-finished, schedules, skip,
+  cancel) and typing a message with the keyboard up. Re-add Spotify and Brave
+  in the window's Apps page: the old window merged them into one broken entry,
+  which is now dropped.
 
 
 - [ ] **Click through the setup window on a clean PC**
@@ -230,6 +231,38 @@ Open items only, in the order I would do them. Anything finished has moved to
 
 Kept in date order, newest first, so it is obvious what changed lately without
 reading the whole of **Done**.
+
+- [x] **Fixes from the first phone test** *(8 Oct, v1.0.23)*
+  - **Apps merged into one** — Windows PowerShell 5.1 hands a JSON list back
+    as a single item, so the window read three apps as one and saved them
+    merged. Fixed in `Get-AgentApps`; broken entries are dropped.
+  - **App icons** — read from the program a Start-menu shortcut opens (not
+    the shortcut, which carries Windows' arrow) and from Steam's library
+    cache; stored in `apps.json`, shown in the window and on the phone.
+  - **Next / previous did nothing** — the media key went to whichever player
+    Windows called current: a paused YouTube tab, with nothing to skip to,
+    while Spotify played. Now through Windows' media controls: every player
+    listed with what it can do, the phone picks one, skip greys out where it
+    cannot work.
+  - **Messages never appeared** — Windows notifications were being hidden on
+    the dev PC. Messages, "your screen is being viewed" and the timer warnings
+    are now a small window of Reveille's own, which nothing hides.
+  - **Screen view slow, and blinking on Sharp** — no fixed pause between
+    pictures, "unchanged" answered in a few bytes by fingerprint, and each new
+    picture decoded out of sight before it is swapped in.
+  - **The lock screen was visible** — Windows let the copy succeed. The helper
+    now checks whether the PC is locked (LogonUI, and which desktop has the
+    input) before every picture.
+  Agent test: 63 checks, 71 with the two that show pop-ups.
+
+- [x] **The bundled Node is called reveille.exe** *(8 Oct)*
+  So Task Manager's Details, Activity Monitor and the firewall rule say
+  Reveille. Renaming keeps the OpenJS signature valid; the description inside
+  the file ("Node.js JavaScript Runtime") cannot change without breaking it,
+  so Task Manager's Processes tab still shows that. The installer now makes a
+  firewall rule named Reveille before the agent first listens, instead of
+  leaving Windows to ask in a box that names Node.js. The setup window and the
+  web version also use the real app icon now (`tools/window-icon.py`).
 
 - [x] **The features batch** *(8 Oct, v1.0.22)*
   Picked by the owner from the interactive menu (`docs/feature-menu.html`), in

@@ -2,7 +2,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const commands = require('./commands');
-const { toast } = require('./notify');
+const { popup } = require('./notify');
 const winhelper = require('./winhelper');
 const activity = require('./activity');
 const { dataFile } = require('./paths');
@@ -158,11 +158,11 @@ async function checkFinished() {
 
   finished = null;
   activity.record('whenFinishedFired', { detail: watching.action });
-  toast({
-    title: 'Reveille',
-    body: watching.action === 'sleep'
-      ? 'Everything has gone quiet, so this PC goes to sleep in a minute. Cancel it from Reveille on your phone.'
-      : 'Everything has gone quiet, so this PC shuts down in a minute. Cancel it from Reveille on your phone.',
+  popup({
+    title: watching.action === 'sleep' ? 'Going to sleep in a minute' : 'Shutting down in a minute',
+    body: 'Everything has gone quiet, as Reveille was asked to wait for. Cancel it from Reveille on your phone.',
+    seconds: 55,
+    tone: 'warn',
   }).catch(() => {});
   await fire(watching.action, FINISHED_WARNING_SECONDS).catch((err) => activity.record('failed', { detail: err.message }));
 }
@@ -299,9 +299,11 @@ async function checkSchedules() {
       const seconds = Math.max(5, Math.round((target.getTime() - now.getTime()) / 1000));
       activity.record('scheduleFired', { detail: `${s.action} at ${s.time}` });
       const verb = s.action === 'restart' ? 'restarts' : s.action === 'sleep' ? 'goes to sleep' : 'shuts down';
-      toast({
-        title: 'Reveille',
-        body: `This PC ${verb} at ${s.time}, as scheduled. Cancel it from Reveille on your phone.`,
+      popup({
+        title: `This PC ${verb} at ${s.time}`,
+        body: 'As scheduled in Reveille. Save your work, or cancel it from Reveille on your phone.',
+        seconds: 60,
+        tone: 'warn',
       }).catch(() => {});
       await fire(s.action, seconds).catch((err) => activity.record('failed', { detail: err.message }));
     }

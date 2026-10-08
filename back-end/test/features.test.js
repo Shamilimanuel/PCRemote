@@ -75,7 +75,7 @@ async function main() {
   const data = fs.mkdtempSync(path.join(os.tmpdir(), 'reveille-test-'));
   fs.writeFileSync(path.join(data, 'config.json'), JSON.stringify({ port: PORT, token: TOKEN }));
   fs.writeFileSync(path.join(data, 'apps.json'), JSON.stringify([
-    { id: 'notepad', name: 'Notepad', target: 'C:\\Windows\\notepad.exe' },
+    { id: 'notepad', name: 'Notepad', target: 'C:\\Windows\\notepad.exe', icon: 'iVBORw0KGgo=' },
     { id: 'bad', name: 'Has a quote', target: 'x" & calc' },
   ]));
 
@@ -132,6 +132,13 @@ async function main() {
       is('a level that is not a number', (await call('POST', '/volume', { level: 'loud' })).status, 400);
       is('muted that is not true or false', (await call('POST', '/volume', { muted: 'yes' })).status, 400);
       is('a media key that does not exist', (await call('POST', '/media', { key: 'eject' })).status, 400);
+      is('a player that is not text', (await call('POST', '/media', { key: 'next', session: 5 })).status, 400);
+      const playing = await call('GET', '/nowplaying');
+      is('what is playing: answers', playing.status, 200);
+      truthy('what is playing: a list of players', Array.isArray(playing.body.sessions));
+      for (const s of playing.body.sessions) {
+        truthy(`  ${s.app}: says what it can do`, typeof s.canNext === 'boolean' && typeof s.playing === 'boolean');
+      }
     }
 
     console.log('\n=== messages ===');
@@ -143,7 +150,7 @@ async function main() {
 
     console.log('\n=== apps: names out, never paths ===');
     const list = await call('GET', '/apps');
-    is('only the valid entry is offered', list.body.apps, [{ id: 'notepad', name: 'Notepad' }]);
+    is('only the valid entry is offered, with its icon', list.body.apps, [{ id: 'notepad', name: 'Notepad', icon: 'iVBORw0KGgo=' }]);
     is('no target ever leaves the PC', JSON.stringify(list.body).includes('notepad.exe'), false);
     is('an id not on the list', (await call('POST', '/launch', { id: 'calc' })).status, 404);
     is('the entry with a quote in it', (await call('POST', '/launch', { id: 'bad' })).status, 404);
@@ -183,6 +190,11 @@ async function main() {
       is('signed', shot.signed, true);
       is('640 wide', shot.body.width, 640);
       is('a real JPEG', Buffer.from(shot.body.jpeg, 'base64').subarray(0, 2).toString('hex'), 'ffd8');
+      truthy('with a fingerprint', /^[0-9a-f]{32}$/.test(shot.body.hash));
+      // Usually unchanged a moment later; a ticking clock or a video can
+      // change it, so either answer is right as long as it is well-formed.
+      const again = await call('GET', `/screen?w=640&q=50&since=${shot.body.hash}`);
+      truthy('asked again with it: "same" and no picture, or a new one', again.body.same === true ? !again.body.jpeg : Boolean(again.body.jpeg));
     }
 
     console.log('\n=== cancel, and the activity log ===');

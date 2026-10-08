@@ -32,9 +32,14 @@ function load() {
   }
 }
 
-/** What the phone sees: names, never targets. */
+/** A small PNG, as the setup window stored it; anything else is dropped. */
+function iconOf(app) {
+  return typeof app.icon === 'string' && app.icon.length < 40000 && /^[A-Za-z0-9+/=]+$/.test(app.icon) ? app.icon : null;
+}
+
+/** What the phone sees: names and icons, never targets. */
 function list() {
-  return load().map((a) => ({ id: a.id, name: a.name.trim().slice(0, 60) }));
+  return load().map((a) => ({ id: a.id, name: a.name.trim().slice(0, 60), icon: iconOf(a) }));
 }
 
 function count() {

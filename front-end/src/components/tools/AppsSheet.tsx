@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { AppEntry, Device } from '../../types/device';
 import { launchApp, listApps } from '../../lib/api';
 import { explain } from '../../lib/errors';
@@ -81,9 +81,14 @@ function AppRow({ app, busy, onPress }: { app: AppEntry; busy: boolean; onPress:
       accessibilityRole="button"
       accessibilityLabel={app.name}
     >
-      <View style={[styles.icon, { backgroundColor: theme.ground }]}>
-        <AppsIcon size={18} color={theme.dusk} strokeWidth={2} />
-      </View>
+      {app.icon ? (
+        // The program's own icon, read on the PC by the Reveille window.
+        <Image source={{ uri: `data:image/png;base64,${app.icon}` }} style={styles.picture} />
+      ) : (
+        <View style={[styles.icon, { backgroundColor: theme.ground }]}>
+          <AppsIcon size={18} color={theme.dusk} strokeWidth={2} />
+        </View>
+      )}
       <Text style={[styles.name, { color: theme.ink }]} numberOfLines={1}>{app.name}</Text>
       {busy && <ActivityIndicator color={theme.dusk} />}
     </Pressable>
@@ -96,6 +101,7 @@ const styles = StyleSheet.create({
   list: { gap: 10 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: RADIUS.field, paddingVertical: 12, paddingHorizontal: 14 },
   icon: { width: 34, height: 34, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  picture: { width: 34, height: 34, borderRadius: 8 },
   name: { flex: 1, fontSize: 15, fontWeight: '800' },
   status: { fontSize: 13, fontWeight: '800', textAlign: 'center' },
 });

@@ -245,6 +245,12 @@ export const en = {
   next: 'Next',
   previous: 'Previous',
   mediaHint: 'Works with whatever is playing on the PC — Spotify, YouTube, Netflix, a game.',
+  nowPlaying: 'NOW PLAYING',
+  nothingPlaying: 'Nothing is playing on the PC right now. The buttons still send the media keys.',
+  controlling: (app: string) => `The buttons control ${app}. Tap another to switch.`,
+  playingWord: 'Playing',
+  pausedWord: 'Paused',
+  cantSkip: 'can’t skip',
 
   // --- message ---
   messageTitle: (name: string) => `Message to ${name}`,
@@ -592,6 +598,12 @@ export const nl: Strings = {
   next: 'Volgende',
   previous: 'Vorige',
   mediaHint: 'Werkt met wat er op de pc speelt — Spotify, YouTube, Netflix, een game.',
+  nowPlaying: 'NU AAN HET SPELEN',
+  nothingPlaying: 'Er speelt nu niets op de pc. De knoppen sturen nog wel de mediatoetsen.',
+  controlling: (app: string) => `De knoppen bedienen ${app}. Tik op een ander om te wisselen.`,
+  playingWord: 'Speelt',
+  pausedWord: 'Gepauzeerd',
+  cantSkip: 'kan niet overslaan',
 
   messageTitle: (name: string) => `Bericht aan ${name}`,
   messageHint: 'Het verschijnt in de hoek van het scherm van de pc.',

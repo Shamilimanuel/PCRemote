@@ -961,12 +961,27 @@ function Get-AgentApps {
     param([string]$Destination)
     $path = Join-Path $Destination 'apps.json'
     if (-not (Test-Path $path)) { return @() }
-    try { return @(Get-Content $path -Raw | ConvertFrom-Json) } catch { return @() }
+    try { $parsed = Get-Content $path -Raw | ConvertFrom-Json } catch { return @() }
+    # Windows PowerShell hands a JSON list back as one item -- the whole list --
+    # and wrapping that in @() gives a list of one. Unrolling it first is what
+    # keeps three apps three apps. (Before this, adding a second app merged
+    # the first two into one entry with both names.)
+    $list = @($parsed | ForEach-Object { $_ })
+    # Anything the agent itself would refuse -- such as an entry merged by that
+    # bug, whose id has a space in it -- is left out, to be added again.
+    return @($list | Where-Object {
+        $_ -and $_.id -is [string] -and $_.id -match '^[A-Za-z0-9_.-]{1,80}$' -and
+        $_.name -is [string] -and $_.target -is [string] -and $_.target -notmatch '"'
+    })
 }
 
 function Save-AgentApps {
     param([string]$Destination, [object[]]$Apps)
-    $clean = @($Apps | Where-Object { $_ } | ForEach-Object { [ordered]@{ id = [string]$_.id; name = [string]$_.name; target = [string]$_.target } })
+    $clean = @($Apps | Where-Object { $_ } | ForEach-Object {
+        $entry = [ordered]@{ id = [string]$_.id; name = [string]$_.name; target = [string]$_.target }
+        if ($_.icon -is [string] -and $_.icon) { $entry.icon = $_.icon }
+        $entry
+    })
     $json = if ($clean.Count) { ConvertTo-Json -InputObject $clean -Depth 4 } else { '[]' }
     [System.IO.File]::WriteAllText((Join-Path $Destination 'apps.json'), $json, (New-Object System.Text.UTF8Encoding $false))
 }
@@ -976,8 +991,59 @@ function Save-AgentApps {
     Steam has installed. Uninstallers, help files and Steam's own runtimes are
     left out -- nobody wants to start those from the sofa.
 #>
+<#
+    A program's own icon as a small PNG in base64, for the window's list and
+    the phone's. Read from the program the shortcut opens rather than from the
+    shortcut, which would carry Windows' little arrow.
+#>
+function ConvertTo-RvIconPng([System.Drawing.Image]$image) {
+    $bitmap = New-Object System.Drawing.Bitmap 48, 48
+    $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+    $graphics.InterpolationMode = 'HighQualityBicubic'
+    $graphics.DrawImage($image, 0, 0, 48, 48)
+    $graphics.Dispose()
+    $stream = New-Object IO.MemoryStream
+    $bitmap.Save($stream, [System.Drawing.Imaging.ImageFormat]::Png)
+    $bitmap.Dispose()
+    return [Convert]::ToBase64String($stream.ToArray())
+}
+
+function Get-RvLinkIcon([string]$Link, $Shell) {
+    try {
+        $from = $Link
+        $shortcut = $Shell.CreateShortcut($Link)
+        $iconFile = ($shortcut.IconLocation -split ',')[0]
+        if ($iconFile -and (Test-Path $iconFile)) { $from = $iconFile }
+        elseif ($shortcut.TargetPath -and (Test-Path $shortcut.TargetPath)) { $from = $shortcut.TargetPath }
+        $icon = [System.Drawing.Icon]::ExtractAssociatedIcon($from)
+        $bitmap = $icon.ToBitmap()
+        try { return ConvertTo-RvIconPng $bitmap } finally { $bitmap.Dispose(); $icon.Dispose() }
+    } catch {
+        return $null
+    }
+}
+
+# Steam keeps each game's small icon in its library cache, named by its hash.
+function Get-RvSteamIcon([string]$SteamPath, [string]$AppId) {
+    try {
+        $folder = Join-Path $SteamPath "appcache\librarycache\$AppId"
+        $file = @(Get-ChildItem $folder -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '^[0-9a-f]{40}\.jpg$' }) | Select-Object -First 1
+        if (-not $file) {
+            $old = Join-Path $SteamPath "appcache\librarycache\${AppId}_icon.jpg"
+            if (Test-Path $old) { $file = Get-Item $old }
+        }
+        if (-not $file) { return $null }
+        $image = [System.Drawing.Image]::FromFile($file.FullName)
+        try { return ConvertTo-RvIconPng $image } finally { $image.Dispose() }
+    } catch {
+        return $null
+    }
+}
+
 function Get-RvAppCandidates {
     $ErrorActionPreference = 'Continue'
+    Add-Type -AssemblyName System.Drawing
+    $shell = New-Object -ComObject WScript.Shell
     $found = @{}
     $ids = @{}
     $skip = '(?i)uninstall|remove|readme|help|documentation|release notes|website|support|license|manual|faq|what''s new'
@@ -996,7 +1062,7 @@ function Get-RvAppCandidates {
             $n = 2; $base = $id
             while ($ids.ContainsKey($id)) { $id = "$base-$n"; $n++ }
             $ids[$id] = $true
-            $found[$key] = @{ id = $id; name = $name; target = $link.FullName; kind = 'program' }
+            $found[$key] = @{ id = $id; name = $name; target = $link.FullName; kind = 'program'; icon = (Get-RvLinkIcon $link.FullName $shell) }
         }
     }
 
@@ -1017,7 +1083,7 @@ function Get-RvAppCandidates {
                 $appId = [regex]::Match($text, '"appid"\s+"(\d+)"').Groups[1].Value
                 $name = [regex]::Match($text, '"name"\s+"([^"]+)"').Groups[1].Value
                 if (-not $appId -or -not $name -or $name -match '(?i)redistributable|steamworks|proton|runtime') { continue }
-                $found["steam-$appId"] = @{ id = "steam-$appId"; name = $name; target = "steam://rungameid/$appId"; kind = 'steam' }
+                $found["steam-$appId"] = @{ id = "steam-$appId"; name = $name; target = "steam://rungameid/$appId"; kind = 'steam'; icon = (Get-RvSteamIcon $steam $appId) }
             }
         }
     }
@@ -1562,7 +1628,7 @@ $script:RvWorkerFunctions = @(
     'Install-PresenceTask', 'Install-Reveille', 'Remove-AdminTask', 'Stop-WhateverHoldsThePort',
     'Read-AgentPort', 'Test-Agent', 'Invoke-TokenReset', 'Remove-Reveille',
     'Install-ReveilleCommand', 'Remove-ReveilleCommand', 'Get-RvStatus', 'Get-RvChecks',
-    'Get-AgentSetting', 'Get-AgentApps', 'Get-RvAppCandidates'
+    'Get-AgentSetting', 'Get-AgentApps', 'Get-RvAppCandidates', 'ConvertTo-RvIconPng', 'Get-RvLinkIcon', 'Get-RvSteamIcon'
 )
 
 function Get-RvWorkerSource {
@@ -2754,6 +2820,32 @@ function Add-RvPermsView {
     if ($w.Job -and $w.Job.Kind -eq 'perm') { Add-RvLog $Panel -NoBar }
 }
 
+# An app's icon from its base64 PNG, or the generic apps icon without one.
+function New-RvAppIcon {
+    param([string]$Png, [double]$Size = 22)
+    if ($Png) {
+        try {
+            $bytes = [Convert]::FromBase64String($Png)
+            $image = New-Object Windows.Media.Imaging.BitmapImage
+            $image.BeginInit()
+            $image.StreamSource = New-Object IO.MemoryStream(, $bytes)
+            $image.CacheOption = [Windows.Media.Imaging.BitmapCacheOption]::OnLoad
+            $image.EndInit()
+            $image.Freeze()
+            $control = New-Object Windows.Controls.Image
+            $control.Source = $image
+            $control.Width = $Size
+            $control.Height = $Size
+            [Windows.Media.RenderOptions]::SetBitmapScalingMode($control, [Windows.Media.BitmapScalingMode]::HighQuality)
+            $control.VerticalAlignment = 'Center'
+            return $control
+        } catch { }
+    }
+    $fallback = New-RvIcon 'apps' -Size ($Size - 2) -Brush 'Ink3'
+    $fallback.VerticalAlignment = 'Center'
+    return $fallback
+}
+
 # The Apps page: what is on the list, and what could be added to it.
 function Add-RvAppsView {
     param($Panel)
@@ -2767,11 +2859,12 @@ function Add-RvAppsView {
         $list = New-RvStack
         for ($i = 0; $i -lt $current.Count; $i++) {
             $app = $current[$i]
-            $row = New-RvGrid @('*', 'auto')
+            $row = New-RvGrid @('34', '*', 'auto')
+            Add-RvCell $row (New-RvAppIcon ([string]$app.icon)) 0
             $name = New-RvText ([string]$app.name) -Size 13.5 -Weight 'SemiBold'
             $name.VerticalAlignment = 'Center'
-            Add-RvCell $row $name 0
-            Add-RvCell $row (New-RvButton (RvT 'appsRemove') @{ Do = 'appRemove'; Id = [string]$app.id } 'RvSmall') 1
+            Add-RvCell $row $name 1
+            Add-RvCell $row (New-RvButton (RvT 'appsRemove') @{ Do = 'appRemove'; Id = [string]$app.id } 'RvSmall') 2
             $last = $i -eq $current.Count - 1
             [void]$list.Children.Add((New-RvBox $row -Bg '' -Line 'Line' -Thick $(if ($last) { @(0) } else { @(0, 0, 0, 1) }) -Radius 0 -Padding @(16, 9)))
         }
@@ -2831,20 +2924,21 @@ function Update-RvAppsList {
     $list = New-RvStack
     for ($i = 0; $i -lt $shown.Count; $i++) {
         $c = $shown[$i]
-        $row = New-RvGrid @('*', 'auto', 'auto')
+        $row = New-RvGrid @('34', '*', 'auto', 'auto')
+        Add-RvCell $row (New-RvAppIcon ([string]$c.icon)) 0
         $name = New-RvText ([string]$c.name) -Size 13.5 -NoWrap
         $name.VerticalAlignment = 'Center'
         $name.TextTrimming = 'CharacterEllipsis'
-        Add-RvCell $row $name 0
+        Add-RvCell $row $name 1
         $pill = New-RvPill $(if ($c.kind -eq 'steam') { RvT 'appsSteam' } else { RvT 'appsProgram' }) $(if ($c.kind -eq 'steam') { 'new' } else { 'off' })
         $pill.Margin = New-RvTh @(10, 0, 10, 0)
-        Add-RvCell $row $pill 1
+        Add-RvCell $row $pill 2
         if ($onList.ContainsKey([string]$c.id)) {
             $done = New-RvText (RvT 'appsOnList') -Size 12 -Brush 'Moss' -Weight 'SemiBold' -Margin @(0, 0, 4, 0)
             $done.VerticalAlignment = 'Center'
-            Add-RvCell $row $done 2
+            Add-RvCell $row $done 3
         } else {
-            Add-RvCell $row (New-RvButton (RvT 'appsAdd') @{ Do = 'appAdd'; Id = [string]$c.id } 'RvSmall') 2
+            Add-RvCell $row (New-RvButton (RvT 'appsAdd') @{ Do = 'appAdd'; Id = [string]$c.id } 'RvSmall') 3
         }
         $last = $i -eq $shown.Count - 1
         [void]$list.Children.Add((New-RvBox $row -Bg '' -Line 'Line' -Thick $(if ($last) { @(0) } else { @(0, 0, 0, 1) }) -Radius 0 -Padding @(16, 8)))
@@ -2859,6 +2953,18 @@ function Complete-RvAppScan {
     param([hashtable]$Job, $Result, [string]$ErrorText)
     $w = $script:RvWin
     $w.Candidates = if ($Result) { @($Result.Candidates) } else { @() }
+    # Apps added before icons existed get theirs now, from the same scan.
+    $apps = @(Get-AgentApps -Destination $InstallDir)
+    $filled = $false
+    foreach ($app in $apps) {
+        if ($app.icon) { continue }
+        $match = @($w.Candidates | Where-Object { $_.id -eq $app.id -and $_.icon }) | Select-Object -First 1
+        if ($match) { $app | Add-Member -NotePropertyName icon -NotePropertyValue $match.icon -Force; $filled = $true }
+    }
+    if ($filled) {
+        Save-AgentApps -Destination $InstallDir -Apps $apps
+        if ($w.Status) { $w.Status.Apps = @(Get-AgentApps -Destination $InstallDir) }
+    }
     if ($w.Mode -eq 'installed' -and $w.View -eq 'apps') { Update-RvContent }
 }
 
