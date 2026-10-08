@@ -36,6 +36,12 @@ jobs:
         with:
           node-version: 24
 
+      - name: Every feature, against a real agent
+        working-directory: back-end
+        run: |
+          npm ci --no-audit --no-fund --loglevel=error
+          node test/features.test.js
+
       - name: Build the downloads
         run: bash tools/bundle-agent.sh dist/agent
 

@@ -1,0 +1,11 @@
+Een nieuwe rij hulpmiddelen onder elke pc:
+
+- Timers: afsluiten als een download klaar is, of op tijd.
+- Media: volume, dempen, afspelen en overslaan.
+- Apps: een game of programma starten dat je op de pc koos.
+- Bericht: een melding op het scherm van de pc.
+- Scherm: het scherm van de pc zien, als dat mag.
+- Activiteit: wat er gedaan is, wanneer en door wie.
+
+Ook het gebruik van de videokaart. Werk de pc bij: typ reveille in
+PowerShell, dan Onderhoud › Bijwerken.

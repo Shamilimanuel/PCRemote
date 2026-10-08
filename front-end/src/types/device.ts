@@ -63,7 +63,25 @@ export type HealthResponse = {
     timedShutdown?: boolean;
     /** Agent reports CPU, memory and disk. */
     stats?: boolean;
+    /** Volume, mute and the media keys (Windows). */
+    media?: boolean;
+    /** Shut down or sleep once the PC goes quiet. */
+    whenFinished?: boolean;
+    /** ...and can tell a finished download by the network going quiet (Windows). */
+    whenFinishedNetwork?: boolean;
+    schedules?: boolean;
+    /** Messages that pop up on the PC. */
+    message?: boolean;
+    activity?: boolean;
+    /** True when the PC's owner has put at least one app on the list. */
+    apps?: boolean;
+    /** Screen viewing is switched on, in the setup window on the PC. */
+    screen?: boolean;
+    /** The PC could show its screen, if its owner switched it on. */
+    screenSupported?: boolean;
   };
+  /** What the PC will do by itself. Absent on agents older than this. */
+  automations?: AutomationSummary;
   /** What the machine is doing. Absent on agents older than this. */
   stats?: MachineStats;
   /** Present only while a timed shutdown or restart is counting down. */
@@ -76,7 +94,72 @@ export type MachineStats = {
   cores: number;
   memory: { totalBytes: number; freeBytes: number; usedPercent: number };
   disk: { drive: string; totalBytes: number; freeBytes: number } | null;
+  /** Windows only; null until the first reading, absent on older agents. */
+  gpu?: GpuStats | null;
 };
+
+export type GpuStats = {
+  name: string;
+  percent: number;
+  memoryUsedBytes: number;
+  memoryTotalBytes: number;
+  /** Only where the card's maker offers a way to read it (NVIDIA). */
+  temperatureC: number | null;
+};
+
+export type WhenFinished = {
+  action: 'shutdown' | 'sleep';
+  watch: 'cpu' | 'network' | 'both';
+  quietMinutes: number;
+  /** How long it has been quiet so far; 0 while it is still busy. */
+  quietForSeconds: number;
+  cpu: number | null;
+  networkBytesPerSecond: number | null;
+};
+
+export type ScheduleAction = 'shutdown' | 'restart' | 'sleep';
+
+export type Schedule = {
+  id: string;
+  /** "HH:MM", the PC's own clock. */
+  time: string;
+  /** 0 = Sunday ... 6 = Saturday. */
+  days: number[];
+  action: ScheduleAction;
+  enabled: boolean;
+  /** A date (YYYY-MM-DD) to skip once, or null. */
+  skip: string | null;
+  /** When it next happens, worked out by the PC. Not sent back. */
+  next?: string | null;
+};
+
+export type NextSchedule = { id: string; action: ScheduleAction; time: string; at: string; inSeconds: number };
+
+export type AutomationSummary = {
+  whenFinished: WhenFinished | null;
+  nextSchedule: NextSchedule | null;
+};
+
+export type Automations = AutomationSummary & {
+  schedules: Schedule[];
+  supports: { network: boolean; maxSchedules: number };
+};
+
+export type ActivityEntry = {
+  at: string;
+  /** A key the app translates: shutdown, message, launch, started ... */
+  action: string;
+  detail: string | null;
+  /** How the phone that did it described itself. Anyone can claim any name. */
+  client: string | null;
+  from: string | null;
+};
+
+export type AppEntry = { id: string; name: string };
+
+export type Volume = { level: number; muted: boolean };
+
+export type ScreenShot = { width: number; height: number; jpeg: string; at: string };
 
 /**
  * 'unknown' is the state before the first poll comes back. 'offline' covers

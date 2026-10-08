@@ -1,5 +1,29 @@
-import { Device, HealthResponse, PendingAction, Route } from '../types/device';
+import { Platform } from 'react-native';
+import {
+  ActivityEntry,
+  AppEntry,
+  Automations,
+  Device,
+  HealthResponse,
+  PendingAction,
+  Route,
+  Schedule,
+  ScreenShot,
+  Volume,
+} from '../types/device';
 import { signRequest, verifyResponse } from './signing';
+
+/**
+ * How this phone describes itself to the PC -- its model, "Pixel 8" -- so the
+ * PC's activity log can say which phone did what. Not part of the signature
+ * and not proof of anything: it is a label, and the log shows the phone's
+ * address next to it.
+ */
+const CLIENT = (() => {
+  const constants = Platform.constants as { Model?: string; Brand?: string } | undefined;
+  const model = constants?.Model?.trim();
+  return (model || (Platform.OS === 'android' ? 'Android phone' : 'Phone')).replace(/[^ -~]/g, '').slice(0, 40);
+})();
 
 const TIMEOUT_MS = 5000;
 // Background polls shouldn't hold a spinner for five seconds on a PC that is
@@ -44,6 +68,7 @@ async function once(target: Target, device: Device, path: string, init: RequestI
         ...(init?.headers ?? {}),
         Authorization: signed.authorization,
         'Content-Type': 'application/json',
+        'X-Reveille-Client': CLIENT,
       },
     });
 
@@ -149,4 +174,75 @@ export function sendAction(
 
 export function cancelShutdown(device: Device) {
   return request(device, '/cancel', { method: 'POST' });
+}
+
+// ---------------------------------------------------------- volume and media --
+
+export function getVolume(device: Device) {
+  return request<Volume>(device, '/volume');
+}
+
+export function setVolume(device: Device, change: Partial<Volume>) {
+  return request<Volume>(device, '/volume', { method: 'POST', body: JSON.stringify(change) });
+}
+
+export type MediaKey = 'playpause' | 'next' | 'previous' | 'stop';
+
+export function pressMediaKey(device: Device, key: MediaKey) {
+  return request(device, '/media', { method: 'POST', body: JSON.stringify({ key }) });
+}
+
+// ------------------------------------------------------------------ messages --
+
+export function sendMessage(device: Device, text: string) {
+  return request(device, '/message', { method: 'POST', body: JSON.stringify({ text }) });
+}
+
+// ---------------------------------------------------------------------- apps --
+
+export function listApps(device: Device) {
+  return request<{ apps: AppEntry[] }>(device, '/apps');
+}
+
+export function launchApp(device: Device, id: string) {
+  return request<{ status: string; id: string; name: string }>(device, '/launch', {
+    method: 'POST',
+    body: JSON.stringify({ id }),
+  });
+}
+
+// ---------------------------------------------------------------- automations --
+
+export function getAutomations(device: Device) {
+  return request<Automations>(device, '/automations');
+}
+
+export function setWhenFinished(
+  device: Device,
+  options: { action: 'shutdown' | 'sleep'; watch: 'cpu' | 'network' | 'both'; quietMinutes: number }
+) {
+  return request<Automations>(device, '/when-finished', { method: 'POST', body: JSON.stringify(options) });
+}
+
+export function clearWhenFinished(device: Device) {
+  return request<Automations>(device, '/when-finished', { method: 'POST', body: JSON.stringify({ off: true }) });
+}
+
+export function saveSchedules(device: Device, schedules: Schedule[]) {
+  // `next` is worked out by the PC; it is never sent back.
+  const clean = schedules.map(({ next, ...rest }) => rest);
+  return request<Automations>(device, '/schedules', { method: 'PUT', body: JSON.stringify({ schedules: clean }) });
+}
+
+// ------------------------------------------------------------------ activity --
+
+export function getActivity(device: Device, limit = 50) {
+  return request<{ entries: ActivityEntry[] }>(device, `/activity?limit=${limit}`);
+}
+
+// -------------------------------------------------------------------- screen --
+
+/** One picture of the PC's main screen. Large, so it gets a longer budget. */
+export function getScreen(device: Device, width = 1280, quality = 60) {
+  return request<ScreenShot>(device, `/screen?w=${width}&q=${quality}`, undefined, 8000);
 }

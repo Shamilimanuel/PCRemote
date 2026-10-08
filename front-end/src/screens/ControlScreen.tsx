@@ -13,6 +13,14 @@ import Vitals from '../components/Vitals';
 import TimerSheet from '../components/TimerSheet';
 import WakeProgress from '../components/WakeProgress';
 import { useDialog } from '../components/Dialog';
+import ToolRow, { Tool } from '../components/tools/ToolRow';
+import AutomationStatus from '../components/tools/AutomationStatus';
+import MediaSheet from '../components/tools/MediaSheet';
+import MessageSheet from '../components/tools/MessageSheet';
+import AppsSheet from '../components/tools/AppsSheet';
+import TimersSheet from '../components/tools/TimersSheet';
+import ActivitySheet from '../components/tools/ActivitySheet';
+import ScreenViewer from '../components/tools/ScreenViewer';
 import { explain } from '../lib/errors';
 import { play, Voice } from '../lib/sound';
 import { successFeedback, failureFeedback } from '../lib/haptics';
@@ -68,6 +76,8 @@ export default function ControlScreen({ device, onBack, onEdit, onSettings }: Pr
   const [message, setMessage] = useState<string | null>(null);
   // Which action is waiting on a delay to be chosen.
   const [timerFor, setTimerFor] = useState<ActionKey | null>(null);
+  // Which of the smaller tools has its panel open.
+  const [tool, setTool] = useState<Tool | null>(null);
 
   const { status, health, latencyMs, route, refresh } = useDeviceStatus(
     device,
@@ -339,7 +349,11 @@ export default function ControlScreen({ device, onBack, onEdit, onSettings }: Pr
         {health?.pending && (
           <View style={[styles.pending, { backgroundColor: theme.ground }]}>
             <Text style={[styles.pendingText, { color: theme.dawnDeep }]}>
-              {health.pending.action === 'restart' ? t.countdownRestart : t.countdownShutdown}{' '}
+              {health.pending.action === 'restart'
+                ? t.countdownRestart
+                : health.pending.action === 'sleep'
+                  ? t.countdownSleep
+                  : t.countdownShutdown}{' '}
               {formatCountdown(health.pending.secondsRemaining)} {t.tapCancelToStop}
             </Text>
           </View>
@@ -356,6 +370,10 @@ export default function ControlScreen({ device, onBack, onEdit, onSettings }: Pr
           </Text>
         )}
 
+        <AutomationStatus automations={health?.automations} onPress={() => setTool('timers')} />
+
+        <ToolRow health={health} offline={offline} onOpen={setTool} />
+
         <Vitals stats={health?.stats} />
 
         <NetworkInfo device={device} health={health} latencyMs={latencyMs} status={status} route={route} />
@@ -368,6 +386,13 @@ export default function ControlScreen({ device, onBack, onEdit, onSettings }: Pr
               : t.onlineFootnote}
         </Text>
       </ScrollView>
+
+      <MediaSheet device={device} visible={tool === 'media'} onClose={() => setTool(null)} />
+      <MessageSheet device={device} visible={tool === 'message'} onClose={() => setTool(null)} />
+      <AppsSheet device={device} visible={tool === 'apps'} onClose={() => setTool(null)} />
+      <TimersSheet device={device} visible={tool === 'timers'} onClose={() => setTool(null)} onChanged={refresh} />
+      <ActivitySheet device={device} visible={tool === 'activity'} onClose={() => setTool(null)} />
+      <ScreenViewer device={device} visible={tool === 'screen'} onClose={() => setTool(null)} />
 
       <TimerSheet
         visible={timerFor !== null}

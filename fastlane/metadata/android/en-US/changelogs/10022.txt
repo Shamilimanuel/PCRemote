@@ -1,0 +1,11 @@
+A new row of tools under each PC:
+
+- Timers: shut down when a download finishes, or on a schedule.
+- Media: volume, mute, play, pause and skip.
+- Apps: start a game or program you chose on the PC.
+- Message: pop a note up on the PC's screen.
+- Screen: see the PC's screen, if allowed on the PC.
+- Activity: what was done, when, and by which phone.
+
+Graphics card use now shows too. Update the PC as well: type reveille in
+PowerShell, then Maintenance › Update.
