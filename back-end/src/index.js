@@ -2,6 +2,9 @@ const os = require('os');
 const { loadOrCreateConfig, getPrimaryNetworkInfo } = require('./config');
 const { createServer } = require('./server');
 const { startWatching } = require('./updates');
+const automation = require('./automation');
+const winhelper = require('./winhelper');
+const activity = require('./activity');
 
 const config = loadOrCreateConfig();
 const netInfo = getPrimaryNetworkInfo();
@@ -36,8 +39,16 @@ app.listen(config.port, '0.0.0.0', () => {
   console.log('');
 
   // The agent has no window, so a toast is the only way it can tell you the PC
-  // half has fallen behind. The phone app checks releases; this checks main.
+  // half has fallen behind. The phone app checks releases; this checks the
+  // agent release.
   startWatching();
+
+  // Shut-down-when-finished and the schedules, checked every few seconds.
+  automation.start();
+  // The Windows helper takes a second or two to start; better now than on the
+  // first press of a volume button.
+  winhelper.warmUp();
+  activity.record('started', { detail: hostname });
 });
 
 // A crash inside the listen callback used to take the agent down silently,

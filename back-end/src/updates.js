@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { toast } = require('./notify');
+const { dataFile } = require('./paths');
 
 /**
  * Tells you when the PC half is out of date.
@@ -17,15 +18,15 @@ const { toast } = require('./notify');
  */
 
 const REPO = 'Shamilimanuel/PCRemote';
-const INSTALLED_PATH = path.join(__dirname, '..', 'installed.json');
-const STATE_PATH = path.join(__dirname, '..', 'update-state.json');
+const INSTALLED_PATH = dataFile('installed.json');
+const STATE_PATH = dataFile('update-state.json');
 
 const CHECK_EVERY_MS = 6 * 60 * 60 * 1000;   // six hours
 const FIRST_CHECK_DELAY_MS = 60 * 1000;      // let the network settle after a boot
 
 function readJson(file) {
   try {
-    return JSON.parse(fs.readFileSync(file, 'utf8').replace(/^﻿/, ''));
+    return JSON.parse(fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, ''));
   } catch {
     return null;
   }

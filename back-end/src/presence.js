@@ -27,8 +27,9 @@ const http = require('http');
 const crypto = require('crypto');
 const { createNonceCache, verifyRequest, signResponse } = require('./signing');
 const { isLocalAddress, describe } = require('./netguard');
+const { dataFile } = require('./paths');
 
-const CONFIG_PATH = path.join(__dirname, '..', 'config.json');
+const CONFIG_PATH = dataFile('config.json');
 const DEFAULT_PORT = 5533;
 
 /**

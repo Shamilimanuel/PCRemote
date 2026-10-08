@@ -116,6 +116,9 @@ async function runAction(action, options = {}) {
 
   let result;
   if (current.schedulesItself) {
+    // Windows refuses a second countdown while one is running ("a system
+    // shutdown has already been scheduled"), so the old one goes first.
+    if (current.cancel) await shell(current.cancel).catch(() => {});
     result = await shell(command);
   } else {
     // The OS cannot take a delay without root here, so the agent holds it.
