@@ -1,0 +1,478 @@
+<!--
+  Reveille feature menu -- the source of the interactive page Claude published
+  on 8 October 2026: https://claude.ai/artifact/TyFLiTprNsMzf1ebiRBedG
+  (private to the owner).
+
+  Kept here as an example of a page the owner liked, so another Claude session
+  can open this file and build the same kind of thing for a different project.
+
+  What makes it work:
+  - One self-contained HTML file, published with Claude's Artifact tool. No
+    build step; the page's own CSS and JS are inline.
+  - The look is the app's own: Dawn (light) and Dusk (dark) from
+    front-end/src/theme/clay.ts, with the soft "clay" shadows, so it feels
+    like part of Reveille rather than a generic page.
+  - The content is a list of options, each with: a plain-English one-liner,
+    a size (quick / medium / big), what it needs (app update, PC update), a
+    "How it works" that opens in place, and any catch written out plainly.
+    A few are marked as Claude's own recommendation.
+  - Filters along the top (kind, size, recommended, only mine), and a
+    sticky "Your picks" panel the owner orders with arrows, plus a note box.
+  - The picks are saved with the artifact's `db` capability
+    (published with capabilities {"db": {}}), in the document `menu/picks`
+    as { picks: [ids in order], note, updatedAt }. Claude reads them back with
+    the ArtifactData tool, so the owner says "done" instead of copying text.
+    localStorage and a "Copy my list" button are the fallback.
+-->
+<title>Reveille Feature Menu</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&family=Nunito+Sans:opsz,wght@6..12,400;6..12,600;6..12,700&display=swap">
+<style>
+  /* Layout: a menu of clay cards on the left, your order on the right, like the app's own surfaces. */
+  :root {
+    /* Dawn, from front-end/src/theme/clay.ts */
+    --ground: #DED6F0; --clay-hi: #FBF8FF; --clay-lo: #DCD2F0;
+    --ink: #38305A; --ink2: #6C6390; --ink3: #8F87AE;
+    --dusk: #7B6BE8; --dusk-deep: #5A48CF; --dawn: #FF9E7A; --dawn-deep: #D9653C;
+    --moss: #2E8F64; --waking: #A86A12; --danger: #C83F5C; --on-fill: #FFFFFF;
+    --shadow: rgba(122,104,172,0.32); --shine: rgba(255,255,255,0.92);
+    --chip: rgba(123,107,232,0.12); --line: rgba(56,48,90,0.12);
+    --display: "Nunito", ui-rounded, "Segoe UI", system-ui, sans-serif;
+    --body: "Nunito Sans", "Segoe UI", system-ui, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      /* Dusk */
+      --ground: #2A2036; --clay-hi: #3B2E4C; --clay-lo: #231A2E;
+      --ink: #F6EDFF; --ink2: #C0AFD4; --ink3: #9A8AB0;
+      --dusk: #A48BFF; --dusk-deep: #7C63E0; --dawn: #FFB183; --dawn-deep: #FFB183;
+      --moss: #68D6A4; --waking: #E9B571; --danger: #FF8099; --on-fill: #1A1226;
+      --shadow: rgba(0,0,0,0.45); --shine: rgba(255,255,255,0.07);
+      --chip: rgba(164,139,255,0.16); --line: rgba(246,237,255,0.10);
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #2A2036; --clay-hi: #3B2E4C; --clay-lo: #231A2E;
+    --ink: #F6EDFF; --ink2: #C0AFD4; --ink3: #9A8AB0;
+    --dusk: #A48BFF; --dusk-deep: #7C63E0; --dawn: #FFB183; --dawn-deep: #FFB183;
+    --moss: #68D6A4; --waking: #E9B571; --danger: #FF8099; --on-fill: #1A1226;
+    --shadow: rgba(0,0,0,0.45); --shine: rgba(255,255,255,0.07);
+    --chip: rgba(164,139,255,0.16); --line: rgba(246,237,255,0.10);
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  body { background: var(--ground); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.5; }
+  .page { max-width: 1180px; margin: 0 auto; padding: 28px 18px 64px; }
+
+  header { display: grid; gap: 6px; margin-bottom: 22px; }
+  .eyebrow { font: 800 11.5px/1 var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--dusk-deep); }
+  :root[data-theme="dark"] .eyebrow { color: var(--dusk); }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .eyebrow { color: var(--dusk); } }
+  h1 { font: 900 clamp(30px, 5vw, 42px)/1.05 var(--display); letter-spacing: -.02em; margin: 0; text-wrap: balance; }
+  .lede { color: var(--ink2); max-width: 64ch; margin: 4px 0 0; }
+
+  /* The clay recipe: a soft drop shadow below, a shine above. */
+  .clay { background: var(--clay-hi); border-radius: 22px;
+          box-shadow: 8px 10px 22px var(--shadow), -6px -6px 16px var(--shine), inset 0 1px 0 var(--shine); }
+  .pressed { background: var(--clay-lo); box-shadow: inset 4px 4px 10px var(--shadow), inset -3px -3px 8px var(--shine); }
+
+  .bar { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin-bottom: 20px; }
+  .seg { display: inline-flex; flex-wrap: wrap; gap: 4px; padding: 5px; border-radius: 16px; }
+  .seg button, .toggle {
+    font: 700 13px/1 var(--display); border: 0; cursor: pointer; color: var(--ink2);
+    background: transparent; padding: 9px 13px; border-radius: 12px;
+  }
+  .seg button[aria-pressed="true"] { background: var(--dusk); color: var(--on-fill); box-shadow: 0 4px 10px var(--shadow); }
+  .toggle { border-radius: 14px; padding: 10px 14px; }
+  .toggle[aria-pressed="true"] { color: var(--dusk-deep); }
+  :root[data-theme="dark"] .toggle[aria-pressed="true"] { color: var(--dusk); }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .toggle[aria-pressed="true"] { color: var(--dusk); } }
+  button:focus-visible, textarea:focus-visible { outline: 3px solid var(--dusk); outline-offset: 2px; }
+
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 26px; align-items: start; }
+  .groups { display: grid; gap: 28px; min-width: 0; }
+  .group h2 { font: 800 13px/1 var(--display); letter-spacing: .1em; text-transform: uppercase; color: var(--ink3); margin: 0 0 12px 4px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 18px; }
+
+  .card { padding: 18px 18px 16px; display: grid; gap: 10px; align-content: start; min-width: 0; transition: transform .15s ease; }
+  .card.picked { outline: 3px solid var(--dusk); outline-offset: -3px; }
+  .card h3 { font: 800 17px/1.2 var(--display); margin: 0; display: flex; gap: 8px; align-items: baseline; }
+  .card p { margin: 0; color: var(--ink2); font-size: 14px; }
+  .rec { font: 800 10.5px/1 var(--display); letter-spacing: .08em; text-transform: uppercase; color: var(--dawn-deep); white-space: nowrap; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { font: 700 11.5px/1 var(--display); padding: 6px 9px; border-radius: 999px; background: var(--chip); color: var(--ink2); }
+  .chip.s { color: var(--moss); } .chip.m { color: var(--waking); } .chip.l { color: var(--danger); }
+  .more { display: grid; gap: 8px; font-size: 13.5px; color: var(--ink2); padding-top: 4px; border-top: 1px solid var(--line); }
+  .more b { color: var(--ink); }
+  .careful { color: var(--waking); }
+  .actions { display: flex; gap: 8px; align-items: center; margin-top: 2px; }
+  .add { font: 800 13.5px/1 var(--display); border: 0; cursor: pointer; padding: 11px 16px; border-radius: 14px;
+         background: var(--dusk); color: var(--on-fill); box-shadow: 0 6px 14px var(--shadow); }
+  .add[aria-pressed="true"] { background: var(--clay-lo); color: var(--dusk-deep); box-shadow: inset 3px 3px 8px var(--shadow); }
+  :root[data-theme="dark"] .add[aria-pressed="true"] { color: var(--dusk); }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .add[aria-pressed="true"] { color: var(--dusk); } }
+  .link { font: 700 13px/1 var(--display); border: 0; background: none; color: var(--ink3); cursor: pointer; padding: 8px 4px; }
+
+  aside { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 16px); padding: 20px; display: grid; gap: 14px; }
+  aside h2 { font: 900 20px/1.1 var(--display); margin: 0; }
+  .empty { color: var(--ink3); font-size: 14px; }
+  ol.picks { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; counter-reset: pick; }
+  ol.picks li { counter-increment: pick; display: grid; grid-template-columns: 26px minmax(0,1fr) auto; gap: 8px; align-items: center;
+                padding: 9px 10px; border-radius: 14px; font-weight: 600; font-size: 14px; }
+  ol.picks li::before { content: counter(pick); width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center;
+                        font: 800 12px/1 var(--display); background: var(--dusk); color: var(--on-fill); }
+  .mini { display: inline-flex; gap: 2px; }
+  .mini button { border: 0; background: none; cursor: pointer; color: var(--ink3); font: 800 14px/1 var(--display); padding: 6px 6px; border-radius: 8px; }
+  .mini button:hover { color: var(--ink); }
+  .tally { display: flex; flex-wrap: wrap; gap: 6px; }
+  textarea { width: 100%; min-height: 76px; resize: vertical; border: 0; border-radius: 14px; padding: 11px 12px;
+             font: 14px/1.45 var(--body); color: var(--ink); }
+  .save { font-size: 12.5px; color: var(--ink3); }
+  .save.ok { color: var(--moss); }
+  .copy { font: 800 13.5px/1 var(--display); border: 0; cursor: pointer; padding: 12px 14px; border-radius: 14px;
+          background: var(--dawn); color: #3A1A08; box-shadow: 0 6px 14px var(--shadow); }
+  .hint { font-size: 12.5px; color: var(--ink3); margin: 0; }
+
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    aside { position: static; order: -1; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="page">
+  <header>
+    <span class="eyebrow">Reveille · what next</span>
+    <h1>The feature menu</h1>
+    <p class="lede">Twenty-one things Reveille could learn next. Add the ones you want, put them in the order you
+      want them, and tell Claude you're done. Your picks are saved on this page, so Claude can read them straight
+      from here.</p>
+  </header>
+
+  <div class="bar">
+    <div class="seg clay" role="group" aria-label="Kind" id="cats"></div>
+    <div class="seg clay" role="group" aria-label="Effort" id="efforts"></div>
+    <button class="toggle clay" id="recOnly" type="button" aria-pressed="false">★ Claude's picks</button>
+    <button class="toggle clay" id="mineOnly" type="button" aria-pressed="false">Only mine</button>
+  </div>
+
+  <div class="layout">
+    <div class="groups" id="groups"></div>
+
+    <aside class="clay" aria-labelledby="pickTitle">
+      <h2 id="pickTitle">Your picks</h2>
+      <p class="empty" id="empty">Nothing yet. Tap <b>Add</b> on anything you'd use.</p>
+      <ol class="picks" id="picks"></ol>
+      <div class="tally" id="tally"></div>
+      <label for="note" class="hint">Anything else, or an idea that isn't here?</label>
+      <textarea class="pressed" id="note" placeholder="e.g. volume first, it's the one I'd use every day"></textarea>
+      <span class="save" id="save" role="status">Not saved yet</span>
+      <button class="copy" id="copy" type="button">Copy my list</button>
+      <p class="hint">The copy is a backup: paste it into the chat if saving here isn't available.</p>
+    </aside>
+  </div>
+</div>
+
+<script>
+(function () {
+  // effort: s = an evening, m = a session or two, l = several sessions.
+  // needs: app = a new APK, pc = the agent (Update in the setup window), both = both.
+  var F = [
+    { id: 'schedule', cat: 'power', t: 'Shut down on a schedule', rec: true, e: 'm', n: 'both',
+      d: 'Every night at 1:00, or weekdays only. The phone shows when the next one is, and you can skip tonight.',
+      how: 'The PC keeps the schedule itself, so it still happens when your phone is off or away. A warning pops up on the PC a few minutes before, with a button to cancel.' },
+    { id: 'whendone', cat: 'power', t: 'Shut down when it’s finished', rec: true, e: 'm', n: 'both',
+      d: 'Leave a download, render or game update running and let the PC switch off once it goes quiet.',
+      how: 'The agent watches CPU and network use. When both stay low for the time you pick (say 10 minutes), it shuts down, with the usual countdown you can cancel from the phone.' },
+    { id: 'awake', cat: 'power', t: 'Keep awake', e: 'm', n: 'both',
+      d: 'Stop the PC sleeping for 1, 2 or 4 hours, for a long download or a film.',
+      how: 'The agent asks Windows not to sleep for that long, then lets go. The phone shows how long is left.' },
+    { id: 'timerall', cat: 'power', t: 'Timer for sleep and lock too', e: 's', n: 'both',
+      d: 'The timer Shutdown and Restart already have, for Sleep and Lock as well.',
+      how: 'Same timer sheet, same cancel button. Small, because the countdown already exists.' },
+    { id: 'screenoff', cat: 'power', t: 'Screen off', e: 's', n: 'both',
+      d: 'Turn the monitor off without sleeping, so music keeps playing and downloads keep going.',
+      how: 'One Windows call that blanks the display. Moving the mouse brings it back.' },
+
+    { id: 'volume', cat: 'media', t: 'Volume and mute', rec: true, e: 'm', n: 'both',
+      d: 'A volume slider and a mute button for the PC, from the couch.',
+      how: 'The agent sets the PC’s master volume and reads it back, so the slider shows the real level.' },
+    { id: 'mediakeys', cat: 'media', t: 'Play, pause, next', rec: true, e: 's', n: 'both',
+      d: 'Control Spotify, YouTube or Netflix playing on the PC.',
+      how: 'Sends the same media keys a keyboard’s play and skip buttons send, so it works with whatever is playing.' },
+    { id: 'clicker', cat: 'media', t: 'Presentation clicker', e: 's', n: 'both',
+      d: 'Next and previous slide for PowerPoint, Google Slides or a PDF.',
+      how: 'Big left and right buttons that send the arrow keys. Handy for school presentations.' },
+    { id: 'screenshot', cat: 'media', t: 'See the screen', e: 'm', n: 'both',
+      d: 'A picture of what’s on the PC right now: is the render done, did the game finish updating?',
+      how: 'The agent takes a screenshot only when you ask and sends it straight to the phone.',
+      careful: 'It shows whatever is on screen, so it starts switched off and you turn it on in the setup window.' },
+    { id: 'touchpad', cat: 'media', t: 'Phone as mouse and keyboard', e: 'l', n: 'both',
+      d: 'A touchpad and keyboard on the phone, for a PC hooked up to a TV.',
+      how: 'Needs a fast connection to the agent so the pointer doesn’t lag, which is most of the work.',
+      careful: 'This can do anything you could do at the PC, so it would get its own switch, off by default.' },
+
+    { id: 'message', cat: 'share', t: 'Send a message to the PC', rec: true, e: 's', n: 'both',
+      d: '“Dinner’s ready!” pops up on the PC screen.',
+      how: 'Uses the same Windows pop-up Reveille already uses for update notices. Quick to build and fun.' },
+    { id: 'sendtext', cat: 'share', t: 'Send text or a link', e: 's', n: 'both',
+      d: 'Share a link from your phone and it opens in the PC’s browser, or paste text into the PC’s clipboard.',
+      how: 'Shows up in Android’s Share menu as “Send to Office-PC”.' },
+    { id: 'launch', cat: 'share', t: 'Start a game or app', e: 'm', n: 'both',
+      d: 'Start Steam, Spotify or a game from the phone, so it’s ready when you sit down.',
+      how: 'You choose the list on the PC; the phone can only start what’s on it.',
+      careful: 'Only programs you added on the PC itself, never anything the phone names.' },
+
+    { id: 'battery', cat: 'watch', t: 'Laptop battery', e: 's', n: 'both',
+      d: 'Charge level and whether it’s plugged in, next to CPU, memory and disk.',
+      how: 'Windows reports it directly. Hidden on desktops that have no battery.' },
+    { id: 'gpu', cat: 'watch', t: 'Graphics card and temperatures', e: 'm', n: 'pc',
+      d: 'GPU use and temperature next to the other vitals, for gaming and rendering.',
+      how: 'Works well for NVIDIA cards, which come with a tool that reports it.',
+      careful: 'AMD and Intel graphics and CPU temperatures often need extra drivers, so they may show as unknown.' },
+    { id: 'alerts', cat: 'watch', t: 'Phone notifications', e: 'm', n: 'app',
+      d: 'Get told when the PC comes online, goes offline, or has been on for hours.',
+      how: 'The app checks in the background.',
+      careful: 'Android only lets apps check about every 15 minutes in the background, so these arrive late, not instantly.' },
+    { id: 'history', cat: 'watch', t: 'Activity log', e: 's', n: 'both',
+      d: 'What was done to the PC, when, and from which phone.',
+      how: 'The agent writes each action down; the app and the setup window show the list. Useful if someone else has the code.' },
+
+    { id: 'fingerprint', cat: 'phone', t: 'Fingerprint before shutdown', rec: true, e: 's', n: 'app',
+      d: 'Ask for your fingerprint or face before Shutdown, Restart and BIOS.',
+      how: 'A switch in Settings. Stops a friend or a little sibling from turning your PC off with your phone.' },
+    { id: 'shortcuts', cat: 'phone', t: 'Long-press shortcuts', e: 's', n: 'app',
+      d: 'Long-press the Reveille icon for “Wake Office-PC” or “Lock Office-PC”.',
+      how: 'Android app shortcuts. Can also be dragged onto the home screen as their own icons.' },
+    { id: 'tile', cat: 'phone', t: 'Quick Settings tile', e: 'm', n: 'app',
+      d: 'A Wake or Lock tile in the pull-down menu, next to Wi-Fi and Bluetooth.',
+      how: 'Needs a small piece of native Android code, which is why it’s medium.' },
+    { id: 'groups', cat: 'phone', t: 'Several PCs at once', e: 's', n: 'app',
+      d: 'Wake or shut down every PC in a group with one tap, like “Gaming setup”.',
+      how: 'Groups in the PC list; each PC still gets its own result.' }
+  ];
+
+  var CATS = [
+    { id: 'all', label: 'Everything' },
+    { id: 'power', label: 'Power and timing' },
+    { id: 'media', label: 'Media and screen' },
+    { id: 'share', label: 'Messages and apps' },
+    { id: 'watch', label: 'Keeping an eye on it' },
+    { id: 'phone', label: 'On the phone' }
+  ];
+  var EFFORT = { s: 'Quick', m: 'Medium', l: 'Big' };
+  var EFFORT_HINT = { s: 'an evening', m: 'a session or two', l: 'several sessions' };
+  var NEEDS = { app: 'App update', pc: 'PC update', both: 'App + PC update' };
+
+  var st = { cat: 'all', effort: 'all', recOnly: false, mineOnly: false, open: {}, picks: [], note: '' };
+  var byId = {};
+  F.forEach(function (f) { byId[f.id] = f; });
+
+  // Remembered filters, per viewer.
+  try {
+    var saved = JSON.parse(localStorage.getItem('reveille-menu-view') || '{}');
+    if (saved.cat) st.cat = saved.cat;
+    if (saved.effort) st.effort = saved.effort;
+  } catch (e) {}
+  function rememberView() {
+    try { localStorage.setItem('reveille-menu-view', JSON.stringify({ cat: st.cat, effort: st.effort })); } catch (e) {}
+  }
+
+  function el(tag, attrs, kids) {
+    var n = document.createElement(tag);
+    if (attrs) Object.keys(attrs).forEach(function (k) {
+      if (k === 'text') n.textContent = attrs[k];
+      else if (k === 'class') n.className = attrs[k];
+      else n.setAttribute(k, attrs[k]);
+    });
+    (kids || []).forEach(function (c) { if (c) n.appendChild(c); });
+    return n;
+  }
+
+  function renderBar() {
+    var cats = document.getElementById('cats');
+    cats.textContent = '';
+    CATS.forEach(function (c) {
+      var b = el('button', { type: 'button', 'aria-pressed': String(st.cat === c.id), text: c.label });
+      b.onclick = function () { st.cat = c.id; rememberView(); render(); };
+      cats.appendChild(b);
+    });
+    var eff = document.getElementById('efforts');
+    eff.textContent = '';
+    [['all', 'Any size'], ['s', 'Quick'], ['m', 'Medium'], ['l', 'Big']].forEach(function (p) {
+      var b = el('button', { type: 'button', 'aria-pressed': String(st.effort === p[0]), text: p[1] });
+      b.onclick = function () { st.effort = p[0]; rememberView(); render(); };
+      eff.appendChild(b);
+    });
+    document.getElementById('recOnly').setAttribute('aria-pressed', String(st.recOnly));
+    document.getElementById('mineOnly').setAttribute('aria-pressed', String(st.mineOnly));
+  }
+
+  function card(f) {
+    var picked = st.picks.indexOf(f.id) !== -1;
+    var title = el('h3', null, [document.createTextNode(f.t)]);
+    if (f.rec) title.appendChild(el('span', { class: 'rec', text: '★ Claude’s pick', title: 'Claude would start with these' }));
+    var chips = el('div', { class: 'chips' }, [
+      el('span', { class: 'chip ' + f.e, text: EFFORT[f.e] + ' · ' + EFFORT_HINT[f.e] }),
+      el('span', { class: 'chip', text: NEEDS[f.n] })
+    ]);
+    var add = el('button', { class: 'add', type: 'button', 'aria-pressed': String(picked), text: picked ? 'Added ✓' : 'Add' });
+    add.onclick = function () { toggle(f.id); };
+    var open = !!st.open[f.id];
+    var more = el('button', { class: 'link', type: 'button', 'aria-expanded': String(open), text: open ? 'Less' : 'How it works' });
+    more.onclick = function () { st.open[f.id] = !open; render(); };
+    var kids = [title, el('p', { text: f.d }), chips];
+    if (open) {
+      var box = el('div', { class: 'more' }, [el('span', { text: f.how })]);
+      if (f.careful) box.appendChild(el('span', { class: 'careful', text: f.careful }));
+      kids.push(box);
+    }
+    kids.push(el('div', { class: 'actions' }, [add, more]));
+    return el('article', { class: 'card clay' + (picked ? ' picked' : '') }, kids);
+  }
+
+  function render() {
+    renderBar();
+    var groups = document.getElementById('groups');
+    groups.textContent = '';
+    var shown = 0;
+    CATS.slice(1).forEach(function (c) {
+      if (st.cat !== 'all' && st.cat !== c.id) return;
+      var items = F.filter(function (f) {
+        return f.cat === c.id &&
+          (st.effort === 'all' || f.e === st.effort) &&
+          (!st.recOnly || f.rec) &&
+          (!st.mineOnly || st.picks.indexOf(f.id) !== -1);
+      });
+      if (!items.length) return;
+      shown += items.length;
+      groups.appendChild(el('section', { class: 'group' }, [
+        el('h2', { text: c.label }),
+        el('div', { class: 'grid' }, items.map(card))
+      ]));
+    });
+    if (!shown) groups.appendChild(el('p', { class: 'empty', text: 'Nothing matches those filters.' }));
+    renderPicks();
+  }
+
+  function renderPicks() {
+    var list = document.getElementById('picks');
+    list.textContent = '';
+    document.getElementById('empty').hidden = st.picks.length > 0;
+    st.picks.forEach(function (id, i) {
+      var f = byId[id];
+      if (!f) return;
+      var up = el('button', { type: 'button', 'aria-label': 'Move ' + f.t + ' up', text: '↑' });
+      var down = el('button', { type: 'button', 'aria-label': 'Move ' + f.t + ' down', text: '↓' });
+      var x = el('button', { type: 'button', 'aria-label': 'Remove ' + f.t, text: '×' });
+      up.disabled = i === 0;
+      down.disabled = i === st.picks.length - 1;
+      up.onclick = function () { move(i, -1); };
+      down.onclick = function () { move(i, 1); };
+      x.onclick = function () { toggle(id); };
+      list.appendChild(el('li', { class: 'pressed' }, [el('span', { text: f.t }), el('span', { class: 'mini' }, [up, down, x])]));
+    });
+
+    var tally = document.getElementById('tally');
+    tally.textContent = '';
+    if (st.picks.length) {
+      var count = { s: 0, m: 0, l: 0 }, app = false, pc = false;
+      st.picks.forEach(function (id) {
+        var f = byId[id]; if (!f) return;
+        count[f.e]++;
+        if (f.n !== 'pc') app = true;
+        if (f.n !== 'app') pc = true;
+      });
+      ['s', 'm', 'l'].forEach(function (k) {
+        if (count[k]) tally.appendChild(el('span', { class: 'chip ' + k, text: count[k] + ' ' + EFFORT[k].toLowerCase() }));
+      });
+      if (app) tally.appendChild(el('span', { class: 'chip', text: 'new app version' }));
+      if (pc) tally.appendChild(el('span', { class: 'chip', text: 'PC update' }));
+    }
+  }
+
+  function toggle(id) {
+    var i = st.picks.indexOf(id);
+    if (i === -1) st.picks.push(id); else st.picks.splice(i, 1);
+    render();
+    persist();
+  }
+  function move(i, d) {
+    var j = i + d;
+    if (j < 0 || j >= st.picks.length) return;
+    var t = st.picks[i]; st.picks[i] = st.picks[j]; st.picks[j] = t;
+    renderPicks();
+    persist();
+  }
+
+  // ---- saving: on the page for Claude to read, with this browser as backup.
+  var doc = null, timer = null;
+  var saveEl = document.getElementById('save');
+  function setSave(text, ok) { saveEl.textContent = text; saveEl.className = 'save' + (ok ? ' ok' : ''); }
+
+  function local(write) {
+    try {
+      if (write) localStorage.setItem('reveille-menu-picks', JSON.stringify({ picks: st.picks, note: st.note }));
+      else return JSON.parse(localStorage.getItem('reveille-menu-picks') || 'null');
+    } catch (e) { return null; }
+  }
+
+  function persist() {
+    local(true);
+    clearTimeout(timer);
+    if (!doc) { setSave('Saved in this browser. Use Copy to send it to Claude.', false); return; }
+    setSave('Saving…', false);
+    timer = setTimeout(function () {
+      doc.set({ picks: st.picks.slice(), note: st.note, updatedAt: new Date().toISOString() })
+        .then(function () { setSave('Saved — Claude can read this', true); })
+        .catch(function () { setSave('Couldn’t save here. Use Copy to send it to Claude.', false); });
+    }, 600);
+  }
+
+  var noteEl = document.getElementById('note');
+  noteEl.addEventListener('input', function () { st.note = noteEl.value.slice(0, 2000); persist(); });
+
+  document.getElementById('recOnly').onclick = function () { st.recOnly = !st.recOnly; render(); };
+  document.getElementById('mineOnly').onclick = function () { st.mineOnly = !st.mineOnly; render(); };
+
+  document.getElementById('copy').onclick = function () {
+    var lines = ['My Reveille feature picks, in order:'];
+    st.picks.forEach(function (id, i) { if (byId[id]) lines.push((i + 1) + '. ' + byId[id].t); });
+    if (!st.picks.length) lines.push('(none yet)');
+    if (st.note.trim()) lines.push('', 'Also: ' + st.note.trim());
+    var text = lines.join('\n');
+    var btn = this;
+    function done() { btn.textContent = 'Copied'; setTimeout(function () { btn.textContent = 'Copy my list'; }, 1500); }
+    try {
+      navigator.clipboard.writeText(text).then(done, function () { noteEl.value = text; noteEl.select(); });
+    } catch (e) { noteEl.value = text; noteEl.select(); }
+  };
+
+  function apply(data) {
+    if (!data) return;
+    if (Array.isArray(data.picks)) st.picks = data.picks.filter(function (id) { return byId[id]; });
+    if (typeof data.note === 'string') { st.note = data.note; noteEl.value = data.note; }
+  }
+
+  apply(local(false));
+  render();
+
+  // Light up the shared save when this view can use it; the page works without.
+  if (window.claude && window.claude.use) {
+    window.claude.use('db').then(function (db) {
+      if (!db) { setSave('Saved in this browser. Use Copy to send it to Claude.', false); return; }
+      doc = db.doc('menu/picks');
+      return doc.get().then(function (snap) {
+        if (snap.exists) { apply(snap.data()); render(); setSave('Saved — Claude can read this', true); }
+        else if (st.picks.length || st.note) persist();
+        else setSave('Your picks save here automatically', false);
+      });
+    }).catch(function () { setSave('Saved in this browser. Use Copy to send it to Claude.', false); });
+  } else {
+    setSave('Saved in this browser. Use Copy to send it to Claude.', false);
+  }
+})();
+</script>
