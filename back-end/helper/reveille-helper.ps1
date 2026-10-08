@@ -29,6 +29,7 @@ using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Runtime.InteropServices;
 
 namespace Reveille
@@ -132,6 +133,31 @@ namespace Reveille
     {
         [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
         [DllImport("user32.dll")] static extern int GetSystemMetrics(int index);
+        [DllImport("user32.dll", SetLastError = true)] static extern IntPtr OpenInputDesktop(uint flags, bool inherit, uint access);
+        [DllImport("user32.dll", SetLastError = true)] static extern bool GetUserObjectInformation(IntPtr obj, int index, StringBuilder info, int length, out int needed);
+        [DllImport("user32.dll")] static extern bool CloseDesktop(IntPtr desktop);
+
+        /// Whether the PC is locked -- or at any screen other than the user's
+        /// own desktop. Windows normally refuses to let a program copy the lock
+        /// screen, but not reliably: on some PCs the copy succeeds and shows
+        /// it. So this is asked first, and a locked PC is never photographed.
+        public static bool Locked()
+        {
+            if (Process.GetProcessesByName("LogonUI").Length > 0) return true;
+            IntPtr desktop = OpenInputDesktop(0, false, 0x0001 /* DESKTOP_READOBJECTS */);
+            if (desktop == IntPtr.Zero) return true;
+            try
+            {
+                var name = new StringBuilder(256);
+                int needed;
+                if (!GetUserObjectInformation(desktop, 2 /* UOI_NAME */, name, name.Capacity, out needed)) return true;
+                return !string.Equals(name.ToString(), "Default", StringComparison.OrdinalIgnoreCase);
+            }
+            finally
+            {
+                CloseDesktop(desktop);
+            }
+        }
 
         public static int Width { get { return GetSystemMetrics(0); } }
         public static int Height { get { return GetSystemMetrics(1); } }
@@ -169,7 +195,16 @@ namespace Reveille
                     using (var stream = new MemoryStream())
                     {
                         output.Save(stream, codec, options);
-                        return output.Width + "x" + output.Height + ":" + Convert.ToBase64String(stream.ToArray());
+                        byte[] jpeg = stream.ToArray();
+                        // A fingerprint of the picture, so an unchanged screen
+                        // need not be sent again: the same pixels always encode
+                        // to the same JPEG.
+                        string hash;
+                        using (var md5 = System.Security.Cryptography.MD5.Create())
+                        {
+                            hash = BitConverter.ToString(md5.ComputeHash(jpeg)).Replace("-", "").ToLowerInvariant();
+                        }
+                        return output.Width + "x" + output.Height + ":" + hash + ":" + Convert.ToBase64String(jpeg);
                     }
                 }
                 finally
@@ -284,6 +319,126 @@ function Get-GpuTemperature {
 
 $keys = @{ playpause = 0xB3; next = 0xB0; previous = 0xB1; stop = 0xB2 }
 
+<#
+    What is playing, and its controls, from Windows' own media controls -- the
+    panel that appears beside the volume flyout.
+
+    Better than pressing a media key, which goes to whichever player Windows
+    happens to consider current: with Spotify playing and a YouTube tab paused,
+    "next" went to the tab, which has nothing to skip to, and nothing happened.
+    Here every player is listed with what it can do, and the phone picks one.
+    A PC without these (Windows 10 before 1809) falls back to the key press.
+#>
+$script:media = $null
+$script:asTask = $null
+
+function Wait-WinRt($operation, [Type]$type) {
+    $task = $script:asTask.MakeGenericMethod($type).Invoke($null, @($operation))
+    [void]$task.Wait(4000)
+    return $task.Result
+}
+
+function Get-MediaManager {
+    if ($script:media) { return $script:media }
+    try {
+        Add-Type -AssemblyName System.Runtime.WindowsRuntime
+        $script:asTask = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object {
+            $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and
+            $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1' })[0]
+        [void][Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager, Windows.Media.Control, ContentType = WindowsRuntime]
+        $script:media = Wait-WinRt ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager]::RequestAsync()) `
+            ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager])
+    } catch {
+        $script:media = $null
+    }
+    return $script:media
+}
+
+# "Spotify.exe" -> Spotify, "Microsoft.ZuneMusic_8wekyb3d8bbwe!Microsoft.ZuneMusic" -> Media Player.
+function Get-MediaAppName([string]$id) {
+    $name = if ($id -match '!(.+)$') { $Matches[1] } else { $id }
+    $name = $name -replace '(?i)\.exe$', ''
+    $known = @{ 'Microsoft.ZuneMusic' = 'Media Player'; 'MSEdge' = 'Edge'; 'Chrome' = 'Chrome'; 'Microsoft.ZuneVideo' = 'Films & TV' }
+    if ($known.ContainsKey($name)) { return $known[$name] }
+    if ($name -match '\.([^.]+)$') { $name = $Matches[1] }
+    return $name
+}
+
+function Get-MediaSessions {
+    $manager = Get-MediaManager
+    if (-not $manager) { return @() }
+    $current = $manager.GetCurrentSession()
+    $currentId = if ($current) { $current.SourceAppUserModelId } else { $null }
+    $seen = @{}
+    foreach ($session in @($manager.GetSessions())) {
+        $id = [string]$session.SourceAppUserModelId
+        if ($seen.ContainsKey($id)) { continue }
+        $seen[$id] = $true
+        $properties = $null
+        try {
+            $properties = Wait-WinRt ($session.TryGetMediaPropertiesAsync()) `
+                ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionMediaProperties])
+        } catch { }
+        $info = $session.GetPlaybackInfo()
+        $controls = $info.Controls
+        [pscustomobject]@{
+            id = $id
+            app = Get-MediaAppName $id
+            title = if ($properties) { [string]$properties.Title } else { '' }
+            artist = if ($properties) { [string]$properties.Artist } else { '' }
+            playing = ([string]$info.PlaybackStatus -eq 'Playing')
+            canPlayPause = [bool]($controls.IsPlayPauseToggleEnabled -or $controls.IsPlayEnabled -or $controls.IsPauseEnabled)
+            canNext = [bool]$controls.IsNextEnabled
+            canPrevious = [bool]$controls.IsPreviousEnabled
+            current = ($id -eq $currentId)
+            session = $session
+        }
+    }
+}
+
+function ConvertTo-MediaList($sessions) {
+    @($sessions | ForEach-Object {
+        @{ id = $_.id; app = $_.app; title = $_.title; artist = $_.artist; playing = $_.playing
+           canPlayPause = $_.canPlayPause; canNext = $_.canNext; canPrevious = $_.canPrevious; current = $_.current }
+    })
+}
+
+function Invoke-Media([string]$action, [string]$sessionId) {
+    $sessions = @(Get-MediaSessions)
+    if (-not $sessions.Count) {
+        # Nothing registered with Windows: the old way, a media key.
+        $vk = $keys[$action]
+        if (-not $vk) { throw "Unknown media key: $action" }
+        [Reveille.Keys]::Press([byte]$vk)
+        return @{ pressed = $action; via = 'key' }
+    }
+    # The player the phone chose; otherwise whichever is playing; otherwise
+    # the one Windows calls current.
+    $target = $null
+    if ($sessionId) { $target = $sessions | Where-Object { $_.id -eq $sessionId } | Select-Object -First 1 }
+    if (-not $target) { $target = $sessions | Where-Object { $_.playing } | Select-Object -First 1 }
+    if (-not $target) { $target = $sessions | Where-Object { $_.current } | Select-Object -First 1 }
+    if (-not $target) { $target = $sessions[0] }
+
+    $s = $target.session
+    switch ($action) {
+        'playpause' { $op = $s.TryTogglePlayPauseAsync() }
+        'next' {
+            if (-not $target.canNext) { throw "$($target.app) has nothing to skip to." }
+            $op = $s.TrySkipNextAsync()
+        }
+        'previous' {
+            if (-not $target.canPrevious) { throw "$($target.app) can't go back." }
+            $op = $s.TrySkipPreviousAsync()
+        }
+        'stop' { $op = $s.TryStopAsync() }
+        default { throw "Unknown media key: $action" }
+    }
+    $ok = Wait-WinRt $op ([bool])
+    if (-not $ok) { throw "$($target.app) didn't respond." }
+    return @{ pressed = $action; via = 'media'; app = $target.app }
+}
+
 [Console]::InputEncoding = New-Object Text.UTF8Encoding $false
 [Console]::OutputEncoding = New-Object Text.UTF8Encoding $false
 
@@ -301,19 +456,20 @@ while ($null -ne ($line = [Console]::In.ReadLine())) {
                 if ($a -and $null -ne $a.muted) { [Reveille.Audio]::SetMuted([bool]$a.muted) }
                 @{ level = [Reveille.Audio]::GetLevel(); muted = [Reveille.Audio]::GetMuted() }
             }
-            'key' {
-                $vk = $keys[[string]$a.key]
-                if (-not $vk) { throw "Unknown media key: $($a.key)" }
-                [Reveille.Keys]::Press([byte]$vk)
-                @{ pressed = [string]$a.key }
-            }
+            'key' { Invoke-Media ([string]$a.key) ([string]$a.session) }
+            'nowplaying' { @{ sessions = @(ConvertTo-MediaList (Get-MediaSessions)) } }
             'screen' {
+                if ([Reveille.Screen]::Locked()) { throw 'locked' }
                 $max = if ($a -and $a.maxWidth) { [int]$a.maxWidth } else { 1280 }
                 $quality = if ($a -and $a.quality) { [long]$a.quality } else { 60 }
                 $shot = [Reveille.Screen]::Capture($max, $quality)
-                $size, $data = $shot -split ':', 2
+                $size, $hash, $data = $shot -split ':', 3
                 $w, $h = $size -split 'x'
-                @{ width = [int]$w; height = [int]$h; jpeg = $data }
+                if ($a -and $a.since -and $a.since -eq $hash) {
+                    @{ width = [int]$w; height = [int]$h; hash = $hash; same = $true }
+                } else {
+                    @{ width = [int]$w; height = [int]$h; hash = $hash; jpeg = $data }
+                }
             }
             'gpu' {
                 if (-not $script:gpuInfo) { $null } else {

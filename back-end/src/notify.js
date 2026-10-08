@@ -105,4 +105,92 @@ function toast(options) {
   return Promise.resolve(false);
 }
 
-module.exports = { toast };
+/**
+ * Reveille's own pop-up: a small card in the corner of the PC's screen.
+ *
+ * For the things someone at the PC must actually see -- a message from the
+ * phone, "your screen is being viewed", "shutting down in five minutes".
+ * Windows notifications are not enough for those: Focus, Do Not Disturb, a
+ * game, or a switch in Settings can each hide them silently, and on the PC
+ * this was built on they never appeared at all. This is an ordinary window, so
+ * none of that applies. It stays on top, never takes the keyboard away from
+ * whatever is being typed, closes itself after a few seconds, and closes when
+ * clicked.
+ *
+ * Its own short-lived PowerShell, so a pop-up can never hold up the agent.
+ * The text goes in as base64 JSON, so nothing in a message can be read as
+ * PowerShell.
+ */
+function windowsPopupScript({ title, body, seconds = 12, tone = 'plain' }) {
+  const data = Buffer.from(JSON.stringify({ title: String(title), body: String(body), seconds, tone }), 'utf8').toString('base64');
+  return `
+$ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
+$m = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${data}')) | ConvertFrom-Json
+$accent = if ($m.tone -eq 'warn') { '#FFA061' } else { '#A48BFF' }
+$xaml = @"
+<Window xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation'
+        WindowStyle='None' AllowsTransparency='True' Background='Transparent' Topmost='True'
+        ShowInTaskbar='False' ShowActivated='False' SizeToContent='WidthAndHeight' ResizeMode='NoResize'
+        FontFamily='Segoe UI' Opacity='0'>
+  <Border Margin='16' CornerRadius='16' Background='#F2201A2B' BorderBrush='#33FFFFFF' BorderThickness='1' Padding='18,14,20,16' MaxWidth='420'>
+    <Border.Effect><DropShadowEffect BlurRadius='24' ShadowDepth='4' Opacity='0.45'/></Border.Effect>
+    <StackPanel>
+      <StackPanel Orientation='Horizontal' Margin='0,0,0,6'>
+        <Ellipse Width='9' Height='9' Fill='$accent' VerticalAlignment='Center' Margin='0,1,8,0'/>
+        <TextBlock Text='Reveille' Foreground='#9A8AB0' FontSize='12' FontWeight='SemiBold'/>
+      </StackPanel>
+      <TextBlock x:Name='Title' xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml' Foreground='#F6EDFF' FontSize='15' FontWeight='Bold' TextWrapping='Wrap'/>
+      <TextBlock x:Name='Body' xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml' Foreground='#E2D8F2' FontSize='14' TextWrapping='Wrap' Margin='0,4,0,0'/>
+    </StackPanel>
+  </Border>
+</Window>
+"@
+$w = [Windows.Markup.XamlReader]::Parse($xaml)
+$w.FindName('Title').Text = $m.title
+$w.FindName('Body').Text = $m.body
+$w.Add_MouseLeftButtonUp({ $this.Close() })
+$w.Add_Loaded({
+  $area = [Windows.SystemParameters]::WorkArea
+  $this.Left = $area.Right - $this.ActualWidth - 8
+  $this.Top = $area.Bottom - $this.ActualHeight - 8
+  $fade = New-Object Windows.Media.Animation.DoubleAnimation(0, 1, [TimeSpan]::FromMilliseconds(220))
+  $this.BeginAnimation([Windows.Window]::OpacityProperty, $fade)
+})
+$timer = New-Object Windows.Threading.DispatcherTimer
+$timer.Interval = [TimeSpan]::FromSeconds([double]$m.seconds)
+$timer.Add_Tick({ $timer.Stop(); $w.Close() })
+$timer.Start()
+[void]$w.ShowDialog()
+`;
+}
+
+function windowsPopup(options) {
+  const encoded = Buffer.from(windowsPopupScript(options), 'utf16le').toString('base64');
+  try {
+    const child = spawn(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-STA', '-WindowStyle', 'Hidden', '-EncodedCommand', encoded],
+      { windowsHide: true, detached: true, stdio: 'ignore' }
+    );
+    child.on('error', () => {});
+    child.unref();
+    return Promise.resolve(true);
+  } catch {
+    return Promise.resolve(false);
+  }
+}
+
+/**
+ * Something someone at the PC must see. A window of Reveille's own on
+ * Windows; elsewhere the desktop's notification, which on macOS and Linux is
+ * not hidden the same way.
+ *
+ * @param {{ title: string, body: string, seconds?: number, tone?: 'plain'|'warn' }} options
+ */
+function popup(options) {
+  if (PLATFORM === 'windows') return windowsPopup(options);
+  return toast(options);
+}
+
+module.exports = { toast, popup, windowsPopupScript };

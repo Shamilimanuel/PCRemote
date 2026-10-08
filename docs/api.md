@@ -318,11 +318,20 @@ the request really came from alongside it.
 GET  /volume                          -> { "level": 30, "muted": false }
 POST /volume { "level": 45 }          -> { "level": 45, "muted": false }
 POST /volume { "muted": true }        -> { "level": 45, "muted": true }
-POST /media  { "key": "playpause" }   -> { "status": "pressed", "key": "playpause" }
+POST /media  { "key": "next", "session": "Spotify.exe" }
+                                      -> { "status": "pressed", "key": "next", "app": "Spotify" }
+GET  /nowplaying
+-> { "sessions": [ { "id": "Spotify.exe", "app": "Spotify", "title": "Teto", "artist": "GL!CH",
+                     "playing": true, "canPlayPause": true, "canNext": true, "canPrevious": true,
+                     "current": false } ] }
 ```
 
-`key` is one of `playpause`, `next`, `previous`, `stop` -- the same keys a
-keyboard's media buttons send, so they work with whatever is playing.
+`key` is one of `playpause`, `next`, `previous`, `stop`. They go through
+Windows' own media controls, to the player named by `session` (an `id` from
+`/nowplaying`) -- or, without one, to whichever player is playing. A player
+that cannot do it (a single YouTube video has nothing to skip to) answers
+`409` with the reason, e.g. `"Brave has nothing to skip to."` On a PC with no
+players registered with Windows, the keyboard's media key is pressed instead.
 
 ### Messages
 
@@ -330,13 +339,14 @@ keyboard's media buttons send, so they work with whatever is playing.
 POST /message { "text": "Dinner's ready!" }   -> { "status": "shown" }
 ```
 
-1 to 300 characters. It appears as a notification on the PC, titled with the
-`X-Reveille-Client` name when one was sent.
+1 to 300 characters. It appears on the PC in a small window of Reveille's own,
+titled with the `X-Reveille-Client` name when one was sent -- not as a Windows
+notification, which Focus, Do Not Disturb or a game can hide without a word.
 
 ### Starting apps
 
 ```
-GET  /apps                       -> { "apps": [ { "id": "steam-570", "name": "Dota 2" } ] }
+GET  /apps                       -> { "apps": [ { "id": "steam-570", "name": "Dota 2", "icon": "<base64 PNG or null>" } ] }
 POST /launch { "id": "steam-570" } -> 202 { "status": "started", "id": "steam-570", "name": "Dota 2" }
 ```
 
@@ -387,14 +397,19 @@ anything that only looks (status, volume level, screen frames) is not.
 
 ```
 GET /screen?w=1280&q=60
--> { "width": 1280, "height": 720, "jpeg": "<base64>", "at": "..." }
+-> { "width": 1280, "height": 720, "hash": "3bf06c9d...", "jpeg": "<base64>", "at": "..." }
+GET /screen?w=1280&q=60&since=3bf06c9d...
+-> { "same": true, "hash": "3bf06c9d...", "width": 1280, "height": 720, "at": "..." }
 ```
+
+`hash` is a fingerprint of the picture. Sent back as `since`, it lets the PC
+answer "unchanged" in a few bytes instead of sending the same picture again.
 
 The PC's main screen as a JPEG, `w` 320 to 3840 pixels wide (never larger than
 the screen), `q` 20 to 90. Base64 inside JSON so the reply is signed like every
 other. `403` with `"reason": "screenOff"` until the PC's owner switches it on
-under **Permissions**; `409` with `"reason": "locked"` while the PC is locked,
-because Windows lets nothing see the lock screen. The first picture after a
+under **Permissions**; `409` with `"reason": "locked"` while the PC is locked:
+the agent checks before every picture, and never sends the lock screen. The first picture after a
 minute without one puts a notification on the PC saying it is being viewed.
 
 ---

@@ -21,7 +21,7 @@ const winhelper = require('./winhelper');
 const activity = require('./activity');
 const automation = require('./automation');
 const apps = require('./apps');
-const { toast } = require('./notify');
+const { popup } = require('./notify');
 
 function timingSafeEqual(a, b) {
   const bufA = Buffer.from(a);
@@ -273,11 +273,22 @@ function createServer(config) {
   });
 
   app.post('/media', requireAuth, async (req, res) => {
-    const { key } = req.body || {};
+    const { key, session } = req.body || {};
     if (!MEDIA_KEYS.includes(key)) return res.status(400).json({ error: `Unknown media key: ${key}` });
+    if (session !== undefined && typeof session !== 'string') return res.status(400).json({ error: 'session must be text' });
     try {
-      await winhelper.call('key', { key });
-      res.json({ status: 'pressed', key });
+      const result = await winhelper.call('key', { key, session: session || '' });
+      res.json({ status: 'pressed', key, app: result?.app ?? null });
+    } catch (err) {
+      // "Spotify has nothing to skip to" is an answer, not a failure.
+      res.status(409).json({ error: err.message });
+    }
+  });
+
+  // Every player Windows knows about, what it is playing, and what it can do.
+  app.get('/nowplaying', requireAuth, async (req, res) => {
+    try {
+      res.json(await winhelper.call('nowplaying'));
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
@@ -290,7 +301,9 @@ function createServer(config) {
     if (!text) return res.status(400).json({ error: 'Write something to send.' });
     if (text.length > 300) return res.status(400).json({ error: 'Messages can be up to 300 characters.' });
     const who = activity.clientOf(req);
-    const shown = await toast({ title: who.client ? `Message from ${who.client}` : 'Message from your phone', body: text });
+    // Reveille's own pop-up rather than a Windows notification, which Focus,
+    // Do Not Disturb or a game can hide without a word.
+    const shown = await popup({ title: who.client ? `Message from ${who.client}` : 'Message from your phone', body: text, seconds: 15 });
     activity.record('message', { ...who, detail: text.slice(0, 80) });
     if (!shown) return res.status(500).json({ error: 'The PC did not show the message.' });
     res.json({ status: 'shown' });
@@ -367,23 +380,31 @@ function createServer(config) {
     }
     const maxWidth = Math.max(320, Math.min(3840, Math.round(Number(req.query.w) || 1280)));
     const quality = Math.max(20, Math.min(90, Math.round(Number(req.query.q) || 60)));
+    // The fingerprint of the picture the phone already has: if the screen has
+    // not changed, the reply says so instead of sending it again.
+    const since = typeof req.query.since === 'string' && /^[0-9a-f]{32}$/.test(req.query.since) ? req.query.since : '';
 
     if (Date.now() - lastScreenAt > 60000) {
       const who = activity.clientOf(req);
       activity.record('screen', who);
-      toast({
-        title: 'Reveille',
-        body: who.client ? `Your screen is being viewed from ${who.client}.` : 'Your screen is being viewed from a phone.',
+      popup({
+        title: 'Your screen is being viewed',
+        body: who.client ? `From ${who.client}, in the Reveille app.` : 'From a phone, in the Reveille app.',
+        seconds: 8,
+        tone: 'warn',
       }).catch(() => {});
     }
     lastScreenAt = Date.now();
 
     try {
-      const shot = await winhelper.call('screen', { maxWidth, quality });
-      res.json({ width: shot.width, height: shot.height, jpeg: shot.jpeg, at: new Date().toISOString() });
+      const shot = await winhelper.call('screen', { maxWidth, quality, since });
+      const at = new Date().toISOString();
+      if (shot.same) return res.json({ same: true, hash: shot.hash, width: shot.width, height: shot.height, at });
+      res.json({ width: shot.width, height: shot.height, hash: shot.hash, jpeg: shot.jpeg, at });
     } catch (err) {
-      // The lock screen is a desktop no program may copy from.
-      const locked = /handle is invalid/i.test(err.message);
+      // A locked PC is never photographed: the helper checks first, and
+      // refuses. The second test is Windows itself refusing, as a backstop.
+      const locked = /^locked$/i.test(err.message) || /handle is invalid/i.test(err.message);
       res.status(locked ? 409 : 500).json({
         error: locked ? 'The PC is locked. Windows does not let anything see the lock screen.' : err.message,
         reason: locked ? 'locked' : undefined,

@@ -1,0 +1,10 @@
+Fixes from the first test of the new tools:
+
+- Media shows what's playing and which player the buttons control, so
+  Next works on Spotify even with a YouTube tab open.
+- Messages now always appear on the PC, in Reveille's own pop-up.
+- The screen view is faster, no longer blinks on Sharp, and never shows
+  a locked PC.
+- Apps show their real icons, and lists of several apps work.
+
+Update the PC too: type reveille in PowerShell, then Maintenance › Update.

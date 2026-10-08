@@ -5,6 +5,7 @@ import {
   Automations,
   Device,
   HealthResponse,
+  MediaSession,
   PendingAction,
   Route,
   Schedule,
@@ -188,8 +189,16 @@ export function setVolume(device: Device, change: Partial<Volume>) {
 
 export type MediaKey = 'playpause' | 'next' | 'previous' | 'stop';
 
-export function pressMediaKey(device: Device, key: MediaKey) {
-  return request(device, '/media', { method: 'POST', body: JSON.stringify({ key }) });
+/** session: which player to send it to; without one, the PC picks the one playing. */
+export function pressMediaKey(device: Device, key: MediaKey, session?: string) {
+  return request<{ status: string; key: MediaKey; app: string | null }>(device, '/media', {
+    method: 'POST',
+    body: JSON.stringify(session ? { key, session } : { key }),
+  });
+}
+
+export function getNowPlaying(device: Device) {
+  return request<{ sessions: MediaSession[] }>(device, '/nowplaying');
 }
 
 // ------------------------------------------------------------------ messages --
@@ -242,7 +251,12 @@ export function getActivity(device: Device, limit = 50) {
 
 // -------------------------------------------------------------------- screen --
 
-/** One picture of the PC's main screen. Large, so it gets a longer budget. */
-export function getScreen(device: Device, width = 1280, quality = 60) {
-  return request<ScreenShot>(device, `/screen?w=${width}&q=${quality}`, undefined, 8000);
+/**
+ * One picture of the PC's main screen. Large, so it gets a longer budget.
+ * `since` is the hash of the picture already shown: if the screen has not
+ * changed, the reply is a few bytes saying so instead of the picture again.
+ */
+export function getScreen(device: Device, width = 1280, quality = 60, since?: string) {
+  const query = `/screen?w=${width}&q=${quality}${since ? `&since=${since}` : ''}`;
+  return request<ScreenShot>(device, query, undefined, 8000);
 }

@@ -155,11 +155,30 @@ export type ActivityEntry = {
   from: string | null;
 };
 
-export type AppEntry = { id: string; name: string };
+/** icon: a small PNG in base64, when the PC found one. */
+export type AppEntry = { id: string; name: string; icon?: string | null };
 
 export type Volume = { level: number; muted: boolean };
 
-export type ScreenShot = { width: number; height: number; jpeg: string; at: string };
+/**
+ * One picture of the PC's screen -- or, with `same`, word that it has not
+ * changed since the picture whose `hash` the phone sent, so nothing is resent.
+ */
+export type ScreenShot = { width: number; height: number; hash: string; jpeg?: string; same?: boolean; at: string };
+
+/** A player Windows knows about: Spotify, a browser tab, Media Player. */
+export type MediaSession = {
+  id: string;
+  app: string;
+  title: string;
+  artist: string;
+  playing: boolean;
+  canPlayPause: boolean;
+  canNext: boolean;
+  canPrevious: boolean;
+  /** The one Windows itself treats as current. */
+  current: boolean;
+};
 
 /**
  * 'unknown' is the state before the first poll comes back. 'offline' covers

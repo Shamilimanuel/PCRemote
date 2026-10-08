@@ -1,0 +1,10 @@
+Verbeteringen na de eerste test van de nieuwe hulpmiddelen:
+
+- Media laat zien wat er speelt en welke speler de knoppen bedienen, dus
+  Volgende werkt op Spotify, ook met een YouTube-tab open.
+- Berichten verschijnen nu altijd op de pc, in Reveilles eigen venster.
+- Het scherm is sneller, knippert niet meer bij Scherp, en toont nooit
+  een vergrendelde pc.
+- Apps hebben hun echte pictogram, en meerdere apps werken.
+
+Werk de pc ook bij: typ reveille in PowerShell, dan Onderhoud › Bijwerken.
