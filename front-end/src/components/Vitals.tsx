@@ -35,6 +35,19 @@ export default function Vitals({ stats }: { stats: MachineStats | null | undefin
         percent={stats.memory.usedPercent}
         detail={`${gb(memUsed)} ${t.ofWord} ${gb(stats.memory.totalBytes)}`}
       />
+      {stats.gpu && (
+        <Bar
+          label={t.graphics}
+          percent={stats.gpu.percent}
+          detail={[
+            stats.gpu.name,
+            t.gpuMemory(gb(stats.gpu.memoryUsedBytes), gb(stats.gpu.memoryTotalBytes)),
+            stats.gpu.temperatureC !== null ? `${stats.gpu.temperatureC}°C` : null,
+          ]
+            .filter(Boolean)
+            .join('  ·  ')}
+        />
+      )}
       {stats.disk && diskUsedPercent !== null && (
         <Bar
           label={`${t.disk} ${stats.disk.drive}`}

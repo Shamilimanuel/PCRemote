@@ -193,3 +193,101 @@ export function MiniPcIcon(props: IconProps) {
     </Icon>
   );
 }
+
+// --- the tools row and its panels ---
+
+export function SpeakerIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <Path d="M4 9.5h3.5L12.5 5v14l-5-4.5H4Z" />
+      <Path d="M16 9a4.2 4.2 0 0 1 0 6" />
+      <Path d="M18.8 6.4a8 8 0 0 1 0 11.2" />
+    </Icon>
+  );
+}
+
+export function MuteIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <Path d="M4 9.5h3.5L12.5 5v14l-5-4.5H4Z" />
+      <Path d="M16.5 9.5l5 5M21.5 9.5l-5 5" />
+    </Icon>
+  );
+}
+
+export function MessageIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <Path d="M4 5.5h16a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5h-9l-5 3.5v-3.5H4A1.5 1.5 0 0 1 2.5 16V7A1.5 1.5 0 0 1 4 5.5Z" />
+      <Path d="M7 10h10M7 13.5h6" />
+    </Icon>
+  );
+}
+
+export function AppsIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <Rect x="3.5" y="3.5" width="7" height="7" rx="1.6" />
+      <Rect x="13.5" y="3.5" width="7" height="7" rx="1.6" />
+      <Rect x="3.5" y="13.5" width="7" height="7" rx="1.6" />
+      <Path d="M17 13.5v7M13.5 17h7" />
+    </Icon>
+  );
+}
+
+export function ScreenIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <Rect x="2.5" y="4" width="19" height="13" rx="2" />
+      <Path d="M8.5 21h7M12 17v4" />
+      <Circle cx="12" cy="10.5" r="2.4" />
+    </Icon>
+  );
+}
+
+export function ClockIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <Circle cx="12" cy="12" r="8.8" />
+      <Path d="M12 7v5.2l3.4 2.1" />
+    </Icon>
+  );
+}
+
+export function ListIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <Path d="M9 6.5h11M9 12h11M9 17.5h11" />
+      <Circle cx="4.8" cy="6.5" r="1.1" />
+      <Circle cx="4.8" cy="12" r="1.1" />
+      <Circle cx="4.8" cy="17.5" r="1.1" />
+    </Icon>
+  );
+}
+
+export function PlayPauseIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <Path d="M4 5.5v13l8-6.5Z" />
+      <Path d="M15.5 6v12M20 6v12" />
+    </Icon>
+  );
+}
+
+export function NextIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <Path d="M5 5.5v13l9-6.5Z" />
+      <Path d="M18.5 5.5v13" />
+    </Icon>
+  );
+}
+
+export function PreviousIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <Path d="M19 5.5v13l-9-6.5Z" />
+      <Path d="M5.5 5.5v13" />
+    </Icon>
+  );
+}

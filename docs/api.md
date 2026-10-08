@@ -283,6 +283,122 @@ in it.
 
 ---
 
+## More controls
+
+Added in October 2026. Each is listed in `capabilities` -- check it before
+offering the control, because an older agent has none of these.
+
+| Capability | Endpoints | Notes |
+|---|---|---|
+| `media` | `/volume`, `/media` | Windows only |
+| `message` | `/message` | |
+| `apps` | `/apps`, `/launch` | true once the PC's owner has put something on the list |
+| `whenFinished`, `schedules` | `/automations`, `/when-finished`, `/schedules` | `whenFinishedNetwork` says whether downloads can be watched (Windows) |
+| `activity` | `/activity` | |
+| `screen` | `/screen` | Windows only, and off until switched on at the PC; `screenSupported` says whether it could be |
+
+`/health` also gains `automations` -- `{ "whenFinished": ..., "nextSchedule": ... }`,
+the short version of `/automations` -- and `stats.gpu` on Windows:
+
+```json
+{ "name": "AMD Radeon RX 9060 XT", "percent": 8, "memoryUsedBytes": 2657841152,
+  "memoryTotalBytes": 17095983104, "temperatureC": null }
+```
+
+`temperatureC` is a number only where the card's maker offers a way to read it
+(NVIDIA); otherwise `null`.
+
+Any request may send `X-Reveille-Client: <a short name>`, which the activity log
+shows as who did it. It is a label, not proof -- the log records the address
+the request really came from alongside it.
+
+### Volume and media keys
+
+```
+GET  /volume                          -> { "level": 30, "muted": false }
+POST /volume { "level": 45 }          -> { "level": 45, "muted": false }
+POST /volume { "muted": true }        -> { "level": 45, "muted": true }
+POST /media  { "key": "playpause" }   -> { "status": "pressed", "key": "playpause" }
+```
+
+`key` is one of `playpause`, `next`, `previous`, `stop` -- the same keys a
+keyboard's media buttons send, so they work with whatever is playing.
+
+### Messages
+
+```
+POST /message { "text": "Dinner's ready!" }   -> { "status": "shown" }
+```
+
+1 to 300 characters. It appears as a notification on the PC, titled with the
+`X-Reveille-Client` name when one was sent.
+
+### Starting apps
+
+```
+GET  /apps                       -> { "apps": [ { "id": "steam-570", "name": "Dota 2" } ] }
+POST /launch { "id": "steam-570" } -> 202 { "status": "started", "id": "steam-570", "name": "Dota 2" }
+```
+
+The list is made on the PC, in the setup window's **Apps** page, and kept in
+`apps.json`. A client only ever sends an id from it: no path, program or
+argument, so it can start nothing that is not on the list. An unknown id is
+`404`.
+
+### Shut down when it's finished
+
+```
+POST /when-finished { "action": "shutdown", "watch": "both", "quietMinutes": 10 }
+POST /when-finished { "off": true }
+```
+
+`action` is `shutdown` or `sleep`; `watch` is `cpu`, `network` or `both`;
+`quietMinutes` is 1 to 240. Once the processor is under 15% and the network
+under 150 KB/s for that long, the PC shows a notification and acts a minute
+later -- `POST /cancel` stops it, as it stops a timed shutdown. Both return the
+whole of `/automations`.
+
+### Schedules
+
+```
+PUT /schedules { "schedules": [
+  { "id": "nightly", "time": "23:30", "days": [0,1,2,3,4,5,6],
+    "action": "shutdown", "enabled": true, "skip": null } ] }
+```
+
+The whole list, every time (at most 12). `time` is the PC's own clock, `days`
+are 0 = Sunday to 6 = Saturday, `action` is `shutdown`, `restart` or `sleep`,
+and `skip` is a date (`YYYY-MM-DD`) to miss once. The PC starts a five-minute
+warning before each, which `POST /cancel` stops. `GET /automations` returns the
+list with `next` worked out for each.
+
+### Activity
+
+```
+GET /activity?limit=50
+-> { "entries": [ { "at": "2026-10-08T21:04:11.120Z", "action": "shutdown",
+                    "detail": null, "client": "Pixel 8", "from": "192.168.1.50" } ] }
+```
+
+Newest first, the last 200 kept. Anything that changes something is logged;
+anything that only looks (status, volume level, screen frames) is not.
+
+### The screen
+
+```
+GET /screen?w=1280&q=60
+-> { "width": 1280, "height": 720, "jpeg": "<base64>", "at": "..." }
+```
+
+The PC's main screen as a JPEG, `w` 320 to 3840 pixels wide (never larger than
+the screen), `q` 20 to 90. Base64 inside JSON so the reply is signed like every
+other. `403` with `"reason": "screenOff"` until the PC's owner switches it on
+under **Permissions**; `409` with `"reason": "locked"` while the PC is locked,
+because Windows lets nothing see the lock screen. The first picture after a
+minute without one puts a notification on the PC saying it is being viewed.
+
+---
+
 ## When things go wrong
 
 | Code | Body | Meaning |

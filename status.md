@@ -1,7 +1,7 @@
 # Reveille — status and checklist
 
 Working notes, kept so a new chat can pick up without re-deriving anything.
-Last updated: **8 October 2026**, at **v1.0.21**.
+Last updated: **8 October 2026**, at **v1.0.22**.
 
 **How we work this list:** items are worked top to bottom. Pick one, say the
 name, and it gets built. When it is done it moves to *Recently done* and we go
@@ -25,7 +25,7 @@ four screenshots from the phone, which unblock the IzzyOnDroid listing. See
 
 | | |
 |---|---|
-| Version | **1.0.21** (versionCode 10021) |
+| Version | **1.0.22** (versionCode 10022) |
 | Repo | `github.com/Shamilimanuel/PCRemote` (public, MIT) |
 | Install (Windows) | `irm github.com/Shamilimanuel/PCRemote/raw/main/setup.ps1 \| iex` — opens the setup window |
 | Open it again | type `reveille` in PowerShell (made by the installer) |
@@ -65,6 +65,9 @@ cd integrations/home-assistant && pytest -q          # the HA integration      1
 cd front-end && npx tsx src/lib/wakeRules.test.ts   # wake state machine       26
 node tools/check-websign.js                         # browser crypto vs node   58
 node tools/app-qr.js --check                        # setup window's app code
+cd back-end && node test/features.test.js           # every agent feature, real agent  58
+                                                    # (--side-effects: +6, shows two
+                                                    #  notifications on the PC)
 cd front-end && npx tsc --noEmit                    # types + i18n completeness
 ```
 
@@ -199,6 +202,15 @@ Open items only, in the order I would do them. Anything finished has moved to
   Pi, Home Assistant, or an old phone. Asked for on 8 October; not designed yet.
 
 
+- [ ] **Try the v1.0.22 tools on the phone** ← first thing next time
+  Built, type-checked and tested against a real agent, but never run on a
+  phone. Worth a few minutes each: drag the volume bar (smooth? lands where
+  you let go?), type a message (does the keyboard cover the box?), the screen
+  view (refresh rate, tap to zoom), a schedule two minutes ahead with Cancel
+  ready, and "when it's finished" with a short wait. The PC needs updating
+  first: `reveille`, then Maintenance › Update.
+
+
 - [ ] **Click through the setup window on a clean PC**
   Everything that can be checked without a person has been; a first install
   from start to finish, on a PC that has never had Reveille, has not. Worth
@@ -218,6 +230,35 @@ Open items only, in the order I would do them. Anything finished has moved to
 
 Kept in date order, newest first, so it is obvious what changed lately without
 reading the whole of **Done**.
+
+- [x] **The features batch** *(8 Oct, v1.0.22)*
+  Picked by the owner from the interactive menu (`docs/feature-menu.html`), in
+  this order, all in one release:
+  1. **Shut down when it's finished** — the PC watches its processor and network
+     and acts once both have been quiet for the minutes chosen.
+  2. **Schedules** — shut down, restart or sleep at set times and days; five
+     minutes' warning, skip-one-night, kept on the PC so the phone can be off.
+  3. **Volume and mute**, and 4. **play / pause / next / previous**.
+  5. **Start a game or app** — from a list made on the PC in the setup window's
+     new Apps page (Start menu + Steam). The phone sends an id, never a path.
+  6. **Graphics card** use and memory in the vitals. Temperature only on NVIDIA:
+     the dev PC's AMD RX 9060 XT does not report one without AMD's own tools,
+     and Windows hides CPU temperature from programs without administrator.
+  7. **Activity log** — what was done, when, from which phone (by its model
+     name, plus its real address).
+  8. **Send a message** that pops up on the PC.
+  9. **See the screen** (the owner's extra request) — view-only, about one
+     picture a second, off until switched on in the window's Permissions page,
+     and the PC shows a notification whenever someone starts watching.
+  Underneath: one long-running PowerShell helper on Windows that compiles a
+  little C# once (volume, media keys, screen, GPU and network counters) —
+  checked first that Smart App Control allows this, which it does — started
+  from a script block so no execution policy is touched.
+  Also fixed: a second timed shutdown on Windows failed because one was already
+  scheduled. Tested with 58 checks against a real agent (64 with the two that
+  show notifications), plus the window drawn in both themes and languages.
+
+
 
 - [x] **Node.js comes with the download** *(8 Oct, no app release needed)*
   Nothing has to be installed before Reveille any more — no Node.js, no npm,

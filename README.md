@@ -2,7 +2,9 @@
 
 Named for the bugle call that wakes a barracks at dawn — a remote control for your
 computer. A mobile app that can **start, shut down, restart, sleep, and lock** your
-**Windows, macOS or Linux** machine over your home Wi-Fi.
+**Windows, macOS or Linux** machine over your home Wi-Fi — and, on Windows, turn the
+volume down, skip a song, start a game, show you its screen, and shut itself down
+once a download has finished.
 
 ## How it works
 
@@ -408,6 +410,27 @@ From the PC's control screen:
 - **Lock** — locks the current session.
 - **Cancel pending** — runs `shutdown /a` to abort a shutdown/restart that's in its
   grace period, in case you tapped the wrong button.
+
+Under the big buttons is a row of smaller tools. Each appears only when the PC's
+agent can do it:
+
+- **Timers** — shut down (or sleep) **when it's finished**: once the processor and
+  the network have been quiet for the minutes you pick, so a download or render can
+  finish first. And a **schedule**: shut down, restart or sleep at a time on chosen
+  days, with a five-minute warning and *skip next*. Both are kept on the PC, so they
+  happen with your phone off.
+- **Media** — volume, mute, play/pause, next and previous, for whatever is playing.
+- **Apps** — start a game or program. Only from a list made **on the PC**, in the
+  setup window's Apps page, which finds Start-menu programs and Steam games; the
+  phone can never name a program of its own.
+- **Message** — a note that pops up on the PC's screen.
+- **Screen** — what is on the PC's main screen, refreshed about once a second. Off
+  until switched on at the PC, under Permissions, and the PC shows a notification
+  whenever someone starts watching. It can only look, never click or type.
+- **Activity** — what was done to the PC, when, and from which phone.
+
+Graphics-card use and memory show with the other vitals; temperature too on NVIDIA
+cards, whose driver reports it (AMD's and Intel's need tools Reveille doesn't install).
 
 Each PC shows a live **Online / Offline** dot, refreshed every 10 seconds by polling the
 agent's `/health` endpoint (tap the dot on the control screen to re-check immediately).
