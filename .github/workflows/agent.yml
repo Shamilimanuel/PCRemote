@@ -55,14 +55,14 @@ jobs:
           cd /tmp/try
           token="$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')"
           printf '{"port":5599,"token":"%s"}' "$token" > config.json
-          ./node/node src/index.js > agent.log 2>&1 &
+          ./reveille src/index.js > agent.log 2>&1 &
           agent=$!
           for i in $(seq 1 30); do
             curl -fs -H "Authorization: Bearer $token" http://127.0.0.1:5599/health > health.json && break
             sleep 1
           done
           python3 -c 'import json; h=json.load(open("health.json")); assert h["status"]=="ok", h; print("agent answered:", h["hostname"], h["os"])'
-          ./node/node pair.js --json | python3 -c 'import json,sys; d=json.load(sys.stdin); assert len(d["qr"])>20; print("pairing code:", len(d["qr"]), "modules")'
+          ./reveille pair.js --json | python3 -c 'import json,sys; d=json.load(sys.stdin); assert len(d["qr"])>20; print("pairing code:", len(d["qr"]), "modules")'
           kill "$agent"
 
       - uses: actions/upload-artifact@v4

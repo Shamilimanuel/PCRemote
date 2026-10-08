@@ -23,9 +23,11 @@ if ($legacy) {
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 
-# The installer ships its own Node next to this script; only a copy set up by
-# hand needs one on the PATH.
-if (-not (Test-Path (Join-Path $scriptDir 'node\node.exe')) -and -not (Get-Command node -ErrorAction SilentlyContinue)) {
+# The installer ships its own Node next to this script, as reveille.exe; only
+# a copy set up by hand needs one on the PATH.
+if (-not (Test-Path (Join-Path $scriptDir 'reveille.exe')) -and
+    -not (Test-Path (Join-Path $scriptDir 'node\node.exe')) -and
+    -not (Get-Command node -ErrorAction SilentlyContinue)) {
     Write-Error 'node.exe was not found next to this script or on PATH. Install Node.js first: https://nodejs.org'
     exit 1
 }

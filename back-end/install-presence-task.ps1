@@ -41,11 +41,13 @@ if (-not (Test-Path $entry)) {
     exit 1
 }
 
-# The installer ships its own Node next to this script. A copy set up by hand
-# uses the one on PATH, resolved to a full path: the task runs before any user
-# profile is loaded, where PATH is the machine's and not necessarily the one
-# this shell inherited.
-$nodeExe = Join-Path $scriptDir 'node\node.exe'
+# The installer ships its own Node next to this script, as reveille.exe (or
+# node\node.exe, before the rename). A copy set up by hand uses the one on
+# PATH, resolved to a full path: the task runs before any user profile is
+# loaded, where PATH is the machine's and not necessarily the one this shell
+# inherited.
+$nodeExe = Join-Path $scriptDir 'reveille.exe'
+if (-not (Test-Path $nodeExe)) { $nodeExe = Join-Path $scriptDir 'node\node.exe' }
 if (-not (Test-Path $nodeExe)) {
     $nodeCmd = Get-Command node -ErrorAction SilentlyContinue
     if (-not $nodeCmd) {
