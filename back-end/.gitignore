@@ -1,2 +1,8 @@
 node_modules/
 config.json
+# Written by the agent and the installer at run time.
+installed.json
+update-state.json
+activity.json
+schedules.json
+apps.json

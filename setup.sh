@@ -99,10 +99,13 @@ get_files() {
   tar -xzf "$tmp/$name" -C "$tmp/stage"
 
   mkdir -p "$INSTALL_DIR"
-  # Everything is replaced apart from the pairing and the note of which update
-  # was last mentioned, so an update keeps the token the phone already has.
+  # Everything is replaced apart from what the agent keeps for its owner --
+  # the pairing, the activity log, the schedules, the list of apps -- so an
+  # update keeps the token the phone already has. The same list as
+  # KEEP_ON_UPDATE in back-end/src/paths.js.
   find "$INSTALL_DIR" -mindepth 1 -maxdepth 1 \
-    ! -name config.json ! -name update-state.json -exec rm -rf {} +
+    ! -name config.json ! -name update-state.json ! -name activity.json \
+    ! -name schedules.json ! -name apps.json -exec rm -rf {} +
   ( cd "$tmp/stage" && tar -cf - . ) | ( cd "$INSTALL_DIR" && tar -xf - )
 
   # Which build this is: the agent compares it with the release's version.json

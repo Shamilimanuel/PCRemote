@@ -41,7 +41,8 @@ curl -fsSL "$dist/SHASUMS256.txt" -o "$work/SHASUMS256.txt"
 app="$work/app"
 mkdir -p "$app"
 cp -R "$root/back-end/." "$app/"
-rm -rf "$app/node_modules" "$app/config.json" "$app/installed.json" "$app/update-state.json" "$app/.gitignore"
+rm -rf "$app/node_modules" "$app/config.json" "$app/installed.json" "$app/update-state.json" "$app/.gitignore" \
+  "$app/activity.json" "$app/schedules.json" "$app/apps.json" "$app/test"
 (cd "$app" && npm ci --omit=dev --no-audit --no-fund --loglevel=error)
 # Command shims for npm scripts: symlinks on Linux, useless on Windows, and
 # nothing here runs them.

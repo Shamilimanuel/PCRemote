@@ -2,8 +2,9 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
+const { dataFile } = require('./paths');
 
-const CONFIG_PATH = path.join(__dirname, '..', 'config.json');
+const CONFIG_PATH = dataFile('config.json');
 const DEFAULT_PORT = 5533;
 
 function generateToken() {
@@ -29,6 +30,20 @@ function loadOrCreateConfig() {
   };
   saveConfig(config);
   return config;
+}
+
+/**
+ * One setting read fresh from config.json, for switches the setup window flips
+ * while the agent is running -- screen viewing, say -- so that turning one off
+ * takes effect at once, without restarting anything.
+ */
+function readSetting(name) {
+  try {
+    const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8').replace(/^\uFEFF/, ''));
+    return config[name];
+  } catch {
+    return undefined;
+  }
 }
 
 function saveConfig(config) {
@@ -91,6 +106,7 @@ module.exports = {
   broadcastAddress,
   VIRTUAL_ADAPTER,
   loadOrCreateConfig,
+  readSetting,
   saveConfig,
   generateToken,
   getPrimaryNetworkInfo,

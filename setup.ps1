@@ -343,10 +343,13 @@ function Get-AgentFiles {
                 Rename-Item $oldNode ('node.exe.old-' + [DateTime]::Now.Ticks)
             }
         }
-        # Everything else is replaceable, apart from the pairing and the note
-        # of which update was last mentioned.
+        # Everything else is replaceable, apart from what the agent keeps for
+        # its owner: the pairing, the activity log, the schedules, the list of
+        # apps the phone may start, and which update was last mentioned. The
+        # same list as KEEP_ON_UPDATE in back-end/src/paths.js.
+        $keep = @('config.json', 'update-state.json', 'activity.json', 'schedules.json', 'apps.json', 'node')
         Get-ChildItem $Destination -Force |
-            Where-Object { $_.Name -notin @('config.json', 'update-state.json', 'node') } |
+            Where-Object { $_.Name -notin $keep } |
             Remove-Item -Recurse -Force
         Get-ChildItem $nodeDir -Force -ErrorAction SilentlyContinue |
             Where-Object { $_.Name -notlike 'node.exe.old-*' } |
@@ -909,6 +912,99 @@ function Remove-ReveilleCommand {
     }
 }
 
+# ------------------------------------------------------- the agent's own files --
+
+<#
+    One setting in config.json, changed without disturbing the rest -- the
+    pairing token above all. The agent reads these fresh on every request, so a
+    switch flipped here works at once, with nothing restarted.
+#>
+function Set-AgentSetting {
+    param([string]$Destination, [string]$Name, $Value)
+    $path = Join-Path $Destination 'config.json'
+    $config = Get-Content $path -Raw | ConvertFrom-Json
+    $config | Add-Member -NotePropertyName $Name -NotePropertyValue $Value -Force
+    # No BOM: JSON.parse rejects one, and the agent reads this file.
+    [System.IO.File]::WriteAllText($path, ($config | ConvertTo-Json -Depth 6), (New-Object System.Text.UTF8Encoding $false))
+}
+
+function Get-AgentSetting {
+    param([string]$Destination, [string]$Name)
+    try { return (Get-Content (Join-Path $Destination 'config.json') -Raw | ConvertFrom-Json).$Name } catch { return $null }
+}
+
+<#
+    The games and programs the phone may start: apps.json next to the agent.
+    The phone only ever sends an id from this list, never a program or a path,
+    so this list -- made here, on the PC -- is the whole of what it can start.
+#>
+function Get-AgentApps {
+    param([string]$Destination)
+    $path = Join-Path $Destination 'apps.json'
+    if (-not (Test-Path $path)) { return @() }
+    try { return @(Get-Content $path -Raw | ConvertFrom-Json) } catch { return @() }
+}
+
+function Save-AgentApps {
+    param([string]$Destination, [object[]]$Apps)
+    $clean = @($Apps | Where-Object { $_ } | ForEach-Object { [ordered]@{ id = [string]$_.id; name = [string]$_.name; target = [string]$_.target } })
+    $json = if ($clean.Count) { ConvertTo-Json -InputObject $clean -Depth 4 } else { '[]' }
+    [System.IO.File]::WriteAllText((Join-Path $Destination 'apps.json'), $json, (New-Object System.Text.UTF8Encoding $false))
+}
+
+<#
+    What could go on that list: every program in the Start menu, and every game
+    Steam has installed. Uninstallers, help files and Steam's own runtimes are
+    left out -- nobody wants to start those from the sofa.
+#>
+function Get-RvAppCandidates {
+    $ErrorActionPreference = 'Continue'
+    $found = @{}
+    $ids = @{}
+    $skip = '(?i)uninstall|remove|readme|help|documentation|release notes|website|support|license|manual|faq|what''s new'
+
+    $folders = @([Environment]::GetFolderPath('CommonStartMenu'), [Environment]::GetFolderPath('StartMenu')) |
+        Where-Object { $_ } | ForEach-Object { Join-Path $_ 'Programs' }
+    foreach ($folder in $folders) {
+        foreach ($link in @(Get-ChildItem $folder -Recurse -Filter *.lnk -ErrorAction SilentlyContinue)) {
+            $name = $link.BaseName.Trim()
+            if (-not $name -or $name -match $skip -or $link.FullName -match '"') { continue }
+            $key = $name.ToLowerInvariant()
+            if ($found.ContainsKey($key)) { continue }
+            $id = 'lnk-' + (($name -replace '[^A-Za-z0-9]+', '-').Trim('-').ToLowerInvariant())
+            if ($id.Length -gt 70) { $id = $id.Substring(0, 70) }
+            if ($id -eq 'lnk-') { $id = 'lnk-app' }
+            $n = 2; $base = $id
+            while ($ids.ContainsKey($id)) { $id = "$base-$n"; $n++ }
+            $ids[$id] = $true
+            $found[$key] = @{ id = $id; name = $name; target = $link.FullName; kind = 'program' }
+        }
+    }
+
+    # Steam keeps a list of its library folders, and one small manifest per
+    # installed game in each, with the game's number and name.
+    $steam = (Get-ItemProperty 'HKCU:\Software\Valve\Steam' -ErrorAction SilentlyContinue).SteamPath
+    if ($steam) {
+        $libraries = @(Join-Path $steam 'steamapps')
+        $vdf = Join-Path $steam 'steamapps\libraryfolders.vdf'
+        if (Test-Path $vdf) {
+            foreach ($m in [regex]::Matches((Get-Content $vdf -Raw), '"path"\s+"([^"]+)"')) {
+                $libraries += Join-Path ($m.Groups[1].Value -replace '\\\\', '\') 'steamapps'
+            }
+        }
+        foreach ($library in ($libraries | Select-Object -Unique)) {
+            foreach ($manifest in @(Get-ChildItem $library -Filter 'appmanifest_*.acf' -ErrorAction SilentlyContinue)) {
+                $text = Get-Content $manifest.FullName -Raw
+                $appId = [regex]::Match($text, '"appid"\s+"(\d+)"').Groups[1].Value
+                $name = [regex]::Match($text, '"name"\s+"([^"]+)"').Groups[1].Value
+                if (-not $appId -or -not $name -or $name -match '(?i)redistributable|steamworks|proton|runtime') { continue }
+                $found["steam-$appId"] = @{ id = "steam-$appId"; name = $name; target = "steam://rungameid/$appId"; kind = 'steam' }
+            }
+        }
+    }
+    return @($found.Values | Sort-Object { $_.name })
+}
+
 # --------------------------------------------------------- what the window shows --
 
 <#
@@ -932,6 +1028,8 @@ function Get-RvStatus {
         Firmware = [bool](Get-ScheduledTask -TaskName $FirmwareTask -ErrorAction SilentlyContinue)
         Presence = [bool](Get-ScheduledTask -TaskName $PresenceTask -ErrorAction SilentlyContinue)
         Uefi = (Test-Uefi); Sha = $null; Ahead = $null; Compared = $false
+        AllowScreen = ((Get-AgentSetting -Destination $Destination -Name 'allowScreen') -eq $true)
+        Apps = @(Get-AgentApps -Destination $Destination)
     }
 
     $listen = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -1031,7 +1129,23 @@ function Get-RvChecks {
 $script:RvStrings = @{
     en = @{
         brandSetup = 'Setup'; brandFirst = 'First install'
-        'nav.pair' = 'Pair a phone'; 'nav.pc' = 'This PC'; 'nav.perms' = 'Permissions'; 'nav.maint' = 'Maintenance'
+        'nav.pair' = 'Pair a phone'; 'nav.pc' = 'This PC'; 'nav.apps' = 'Apps'; 'nav.perms' = 'Permissions'; 'nav.maint' = 'Maintenance'
+        appsTitle = 'Apps the phone can start'
+        appsSub = 'Games and programs the Reveille app may start on this PC. The phone picks a name from this list and can never start anything else.'
+        appsNone = 'Nothing yet. Add a game or a program below.'
+        appsAddHead = 'ADD FROM THIS PC'; appsSearch = 'Search'
+        appsLooking = 'Looking for programs and Steam games\u2026'
+        appsSteam = 'Steam game'; appsProgram = 'Program'
+        appsAdd = 'Add'; appsOnList = 'On the list'; appsRemove = 'Remove'
+        appsMore = '{0} more. Type part of a name to find one.'
+        appsNoMatch = 'Nothing with that name.'
+        appsAdded = '{0} can now be started from the phone.'; appsRemoved = '{0} was taken off the list.'
+        screenTitle = 'See the screen from your phone'
+        screenDesc = 'Lets the Reveille app show what is on this PC\u2019s main screen, refreshed about once a second while you have it open.'
+        screenGrants = 'A picture of the main screen, only while the screen view is open in the app.'
+        screenNot = 'It can\u2019t click, type or control anything, and Windows never lets it see the lock screen.'
+        screenNeeds = 'Nothing extra \u2014 no administrator.'
+        screenNote = 'Whenever someone starts watching, this PC shows a notification saying so.'
         agentOn = 'Agent running \u00b7 port {0}'; agentOff = 'Agent not running'; agentNone = 'Not installed yet'
         agentLooking = 'Looking\u2026'; themeTip = 'Light or dark'; refresh = 'Refresh'
 
@@ -1066,7 +1180,7 @@ $script:RvStrings = @{
         wolNote = 'Wake-on-LAN itself is a BIOS setting and can\u2019t be checked from here. If Wake does nothing, that is the first place to look.'
 
         permsTitle = 'Permissions'
-        permsSub = 'Both are optional and both need administrator once. Each one says what it grants before it asks.'
+        permsSub = 'All three are optional. The first two need administrator once; each one says what it grants before it asks.'
         biosDesc = 'Adds a button to the app that restarts this PC straight into its BIOS or firmware settings.'
         grants = 'Grants'; notGrant = 'Doesn\u2019t grant'; needs = 'Needs'
         biosGrants = 'One scheduled task that runs `shutdown /r /fw`.'
@@ -1126,7 +1240,23 @@ $script:RvStrings = @{
     }
     nl = @{
         brandSetup = 'Installatie'; brandFirst = 'Eerste installatie'
-        'nav.pair' = 'Telefoon koppelen'; 'nav.pc' = 'Deze pc'; 'nav.perms' = 'Toestemmingen'; 'nav.maint' = 'Onderhoud'
+        'nav.pair' = 'Telefoon koppelen'; 'nav.pc' = 'Deze pc'; 'nav.apps' = 'Apps'; 'nav.perms' = 'Toestemmingen'; 'nav.maint' = 'Onderhoud'
+        appsTitle = 'Apps die de telefoon mag starten'
+        appsSub = 'Games en programma\u2019s die de Reveille-app op deze pc mag starten. De telefoon kiest een naam uit deze lijst en kan nooit iets anders starten.'
+        appsNone = 'Nog niets. Voeg hieronder een game of programma toe.'
+        appsAddHead = 'TOEVOEGEN VAN DEZE PC'; appsSearch = 'Zoeken'
+        appsLooking = 'Programma\u2019s en Steam-games zoeken\u2026'
+        appsSteam = 'Steam-game'; appsProgram = 'Programma'
+        appsAdd = 'Toevoegen'; appsOnList = 'Op de lijst'; appsRemove = 'Verwijderen'
+        appsMore = 'Nog {0}. Typ een deel van een naam om er een te vinden.'
+        appsNoMatch = 'Niets met die naam.'
+        appsAdded = '{0} kan nu vanaf de telefoon gestart worden.'; appsRemoved = '{0} staat niet meer op de lijst.'
+        screenTitle = 'Het scherm zien op je telefoon'
+        screenDesc = 'Laat de Reveille-app zien wat er op het hoofdscherm van deze pc staat, ongeveer elke seconde ververst zolang je het open hebt.'
+        screenGrants = 'Een afbeelding van het hoofdscherm, alleen terwijl het scherm in de app open staat.'
+        screenNot = 'Het kan niets aanklikken, typen of bedienen, en Windows laat het nooit het vergrendelscherm zien.'
+        screenNeeds = 'Niets extra\u2019s \u2014 geen beheerdersrechten.'
+        screenNote = 'Zodra iemand begint te kijken, laat deze pc daar een melding van zien.'
         agentOn = 'Agent draait \u00b7 poort {0}'; agentOff = 'Agent draait niet'; agentNone = 'Nog niet ge\u00efnstalleerd'
         agentLooking = 'Kijken\u2026'; themeTip = 'Licht of donker'; refresh = 'Vernieuwen'
 
@@ -1161,7 +1291,7 @@ $script:RvStrings = @{
         wolNote = 'Wake-on-LAN zelf is een BIOS-instelling en kan hier niet gecontroleerd worden. Doet Wekken niets, kijk dan daar eerst.'
 
         permsTitle = 'Toestemmingen'
-        permsSub = 'Allebei optioneel en allebei \u00e9\u00e9n keer beheerdersrechten nodig. Elk zegt eerst wat het toestaat.'
+        permsSub = 'Alle drie optioneel. De eerste twee hebben \u00e9\u00e9n keer beheerdersrechten nodig; elk zegt eerst wat het toestaat.'
         biosDesc = 'Voegt een knop toe aan de app die deze pc rechtstreeks naar het BIOS of de firmware-instellingen herstart.'
         grants = 'Staat toe'; notGrant = 'Staat niet toe'; needs = 'Nodig'
         biosGrants = 'E\u00e9n geplande taak die `shutdown /r /fw` uitvoert.'
@@ -1298,6 +1428,7 @@ $script:RvIcons = @{
     check = 'M5,12.5 L9.5,17 L19,7.5'
     cross = 'M7,7 L17,17 M17,7 L7,17'
     refresh = 'M20,12 A8,8 0 1 1 17.7,6.3 M20,4 V9 H15'
+    apps  = 'M5,4 H10 A1,1 0 0 1 11,5 V10 A1,1 0 0 1 10,11 H5 A1,1 0 0 1 4,10 V5 A1,1 0 0 1 5,4 Z M14,4 H19 A1,1 0 0 1 20,5 V10 A1,1 0 0 1 19,11 H14 A1,1 0 0 1 13,10 V5 A1,1 0 0 1 14,4 Z M5,13 H10 A1,1 0 0 1 11,14 V19 A1,1 0 0 1 10,20 H5 A1,1 0 0 1 4,19 V14 A1,1 0 0 1 5,13 Z M16.5,13 V20 M13,16.5 H20'
 }
 
 function Initialize-RvStrings {
@@ -1409,7 +1540,8 @@ $script:RvWorkerFunctions = @(
     'Get-AgentFiles', 'Register-Agent', 'Install-FirmwareTask', 'Test-Uefi',
     'Install-PresenceTask', 'Install-Reveille', 'Remove-AdminTask', 'Stop-WhateverHoldsThePort',
     'Read-AgentPort', 'Test-Agent', 'Invoke-TokenReset', 'Remove-Reveille',
-    'Install-ReveilleCommand', 'Remove-ReveilleCommand', 'Get-RvStatus', 'Get-RvChecks'
+    'Install-ReveilleCommand', 'Remove-ReveilleCommand', 'Get-RvStatus', 'Get-RvChecks',
+    'Get-AgentSetting', 'Get-AgentApps', 'Get-RvAppCandidates'
 )
 
 function Get-RvWorkerSource {
@@ -1430,6 +1562,7 @@ $script:RvWorkerScript = {
     $ErrorActionPreference = 'Stop'
     switch ($Kind) {
         'status' { Get-RvStatus -Destination $InstallDir }
+        'appscan' { @{ Candidates = @(Get-RvAppCandidates) } }
         'check'  { Get-RvChecks }
         'install' {
             $health = Install-Reveille -Destination $InstallDir
@@ -2121,7 +2254,7 @@ function Update-RvSide {
     $panel = $win.FindName('SideMain')
     $panel.Children.Clear()
     if ($w.Mode -eq 'installed') {
-        foreach ($view in @('pair', 'pc', 'perms', 'maint')) {
+        foreach ($view in @('pair', 'pc', 'apps', 'perms', 'maint')) {
             $row = New-Object Windows.Controls.DockPanel
             $icon = New-RvIcon $view -Size 18
             $icon.Margin = New-RvTh @(0, 0, 11, 0)
@@ -2190,6 +2323,7 @@ function Update-RvContent {
         switch ($w.View) {
             'pair'  { Add-RvPairView $panel }
             'pc'    { Add-RvPcView $panel }
+            'apps'  { Add-RvAppsView $panel }
             'perms' { Add-RvPermsView $panel }
             'maint' { Add-RvMaintView $panel }
         }
@@ -2460,7 +2594,7 @@ function Add-RvPcView {
 
 # One of the two optional extras, with its switch and what it grants.
 function New-RvPermCard {
-    param([string]$Title, [string]$Desc, [string]$Grants, [string]$Not, [bool]$On, [hashtable]$Tag, [switch]$Disabled, [string]$Note)
+    param([string]$Title, [string]$Desc, [string]$Grants, [string]$Not, [bool]$On, [hashtable]$Tag, [switch]$Disabled, [string]$Note, [string]$Needs = '')
     $s = New-RvStack
     $top = New-RvGrid @('*', 'auto')
     $h = New-RvText $Title -Size 15 -Weight 'SemiBold'
@@ -2471,7 +2605,8 @@ function New-RvPermCard {
     [void]$s.Children.Add((New-RvText $Desc -Size 13 -Brush 'Ink2' -Margin @(0, 8, 0, 0) -MaxWidth 640))
     $dl = New-RvGrid @('130', '*') -Margin @(0, 12, 0, 0)
     $r = 0
-    foreach ($pair in @(@((RvT 'grants'), $Grants), @((RvT 'notGrant'), $Not), @((RvT 'needs'), (RvT 'admin')))) {
+    $needsText = if ($Needs) { $Needs } else { RvT 'admin' }
+    foreach ($pair in @(@((RvT 'grants'), $Grants), @((RvT 'notGrant'), $Not), @((RvT 'needs'), $needsText))) {
         $dl.RowDefinitions.Add((New-Object Windows.Controls.RowDefinition))
         Add-RvCell $dl (New-RvText $pair[0] -Size 12.5 -Brush 'Ink3' -Margin @(0, 0, 12, 6)) 0 $r
         Add-RvCell $dl (New-RvText $pair[1] -Size 12.5 -Margin @(0, 0, 0, 6)) 1 $r
@@ -2497,7 +2632,119 @@ function Add-RvPermsView {
         ([bool]$s.Firmware) @{ Do = 'perm'; Which = 'bios' } -Disabled:($busy -or $noUefi) -Note $(if ($noUefi) { RvT 'biosNoUefi' } else { '' })))
     [void]$Panel.Children.Add((New-RvPermCard (RvT 'lockTitle') (RvT 'lockDesc') (RvT 'lockGrants' ($s.Port + 1)) (RvT 'lockNot') `
         ([bool]$s.Presence) @{ Do = 'perm'; Which = 'lock' } -Disabled:$busy))
+    # No administrator for this one: it is a setting in config.json, which the
+    # agent reads fresh on every request.
+    [void]$Panel.Children.Add((New-RvPermCard (RvT 'screenTitle') (RvT 'screenDesc') (RvT 'screenGrants') (RvT 'screenNot') `
+        ([bool]$s.AllowScreen) @{ Do = 'screen' } -Needs (RvT 'screenNeeds') -Note (RvT 'screenNote')))
     if ($w.Job -and $w.Job.Kind -eq 'perm') { Add-RvLog $Panel -NoBar }
+}
+
+# The Apps page: what is on the list, and what could be added to it.
+function Add-RvAppsView {
+    param($Panel)
+    $w = $script:RvWin
+    Add-RvHeader $Panel (RvT 'appsTitle') (RvT 'appsSub')
+
+    $current = @(if ($w.Status) { $w.Status.Apps } else { @() })
+    if (-not $current.Count) {
+        [void]$Panel.Children.Add((New-RvNote (RvT 'appsNone') 'info'))
+    } else {
+        $list = New-RvStack
+        for ($i = 0; $i -lt $current.Count; $i++) {
+            $app = $current[$i]
+            $row = New-RvGrid @('*', 'auto')
+            $name = New-RvText ([string]$app.name) -Size 13.5 -Weight 'SemiBold'
+            $name.VerticalAlignment = 'Center'
+            Add-RvCell $row $name 0
+            Add-RvCell $row (New-RvButton (RvT 'appsRemove') @{ Do = 'appRemove'; Id = [string]$app.id } 'RvSmall') 1
+            $last = $i -eq $current.Count - 1
+            [void]$list.Children.Add((New-RvBox $row -Bg '' -Line 'Line' -Thick $(if ($last) { @(0) } else { @(0, 0, 0, 1) }) -Radius 0 -Padding @(16, 9)))
+        }
+        [void]$Panel.Children.Add((New-RvBox $list -Radius 12 -Padding @(0) -Margin @(0, 0, 0, 18)))
+    }
+
+    [void]$Panel.Children.Add((New-RvText (RvT 'appsAddHead') -Size 11.5 -Brush 'Ink3' -Weight 'Bold' -Margin @(0, 4, 0, 8)))
+    if ($null -eq $w.Candidates) {
+        [void]$Panel.Children.Add((New-RvText (RvT 'appsLooking') -Brush 'Ink2'))
+        if (-not (@($w.Queue | Where-Object { $_.Kind -eq 'appscan' }).Count) -and -not ($w.Job -and $w.Job.Kind -eq 'appscan')) {
+            Add-RvJob @{ Kind = 'appscan'; Done = 'Complete-RvAppScan' }
+        }
+        return
+    }
+
+    # The search box is made once and kept, so typing in it never loses focus
+    # to a redraw: only the list under it is rebuilt as you type.
+    if (-not $w.AppsSearch) {
+        $box = New-Object Windows.Controls.TextBox
+        $box.FontSize = 13.5
+        $box.Padding = New-RvTh @(10, 7)
+        $box.SetResourceReference([Windows.Controls.Control]::BackgroundProperty, 'Raised')
+        $box.SetResourceReference([Windows.Controls.Control]::ForegroundProperty, 'Ink')
+        $box.SetResourceReference([Windows.Controls.Control]::BorderBrushProperty, 'Line')
+        $box.SetResourceReference([Windows.Controls.TextBox]::CaretBrushProperty, 'Ink')
+        $box.Add_TextChanged({ Update-RvAppsList })
+        $w.AppsSearch = $box
+    }
+    if ($w.AppsSearch.Parent) { $w.AppsSearch.Parent.Children.Remove($w.AppsSearch) }
+    $searchRow = New-RvGrid @('auto', '*') -Margin @(0, 0, 0, 10)
+    $label = New-RvText (RvT 'appsSearch') -Size 12.5 -Brush 'Ink3' -Margin @(0, 0, 12, 0)
+    $label.VerticalAlignment = 'Center'
+    Add-RvCell $searchRow $label 0
+    Add-RvCell $searchRow $w.AppsSearch 1
+    [void]$Panel.Children.Add($searchRow)
+
+    $w.AppsList = New-RvStack
+    [void]$Panel.Children.Add($w.AppsList)
+    Update-RvAppsList
+}
+
+# Only the results under the search box, so the box itself stays put.
+function Update-RvAppsList {
+    $w = $script:RvWin
+    if (-not $w.AppsList) { return }
+    $w.AppsList.Children.Clear()
+    $query = if ($w.AppsSearch) { $w.AppsSearch.Text.Trim() } else { '' }
+    $onList = @{}
+    foreach ($app in @(if ($w.Status) { $w.Status.Apps } else { @() })) { $onList[[string]$app.id] = $true }
+
+    $hits = @($w.Candidates | Where-Object { -not $query -or $_.name -like "*$query*" })
+    if (-not $hits.Count) {
+        [void]$w.AppsList.Children.Add((New-RvText (RvT 'appsNoMatch') -Brush 'Ink3'))
+        return
+    }
+    $shown = @($hits | Select-Object -First 40)
+    $list = New-RvStack
+    for ($i = 0; $i -lt $shown.Count; $i++) {
+        $c = $shown[$i]
+        $row = New-RvGrid @('*', 'auto', 'auto')
+        $name = New-RvText ([string]$c.name) -Size 13.5 -NoWrap
+        $name.VerticalAlignment = 'Center'
+        $name.TextTrimming = 'CharacterEllipsis'
+        Add-RvCell $row $name 0
+        $pill = New-RvPill $(if ($c.kind -eq 'steam') { RvT 'appsSteam' } else { RvT 'appsProgram' }) $(if ($c.kind -eq 'steam') { 'new' } else { 'off' })
+        $pill.Margin = New-RvTh @(10, 0, 10, 0)
+        Add-RvCell $row $pill 1
+        if ($onList.ContainsKey([string]$c.id)) {
+            $done = New-RvText (RvT 'appsOnList') -Size 12 -Brush 'Moss' -Weight 'SemiBold' -Margin @(0, 0, 4, 0)
+            $done.VerticalAlignment = 'Center'
+            Add-RvCell $row $done 2
+        } else {
+            Add-RvCell $row (New-RvButton (RvT 'appsAdd') @{ Do = 'appAdd'; Id = [string]$c.id } 'RvSmall') 2
+        }
+        $last = $i -eq $shown.Count - 1
+        [void]$list.Children.Add((New-RvBox $row -Bg '' -Line 'Line' -Thick $(if ($last) { @(0) } else { @(0, 0, 0, 1) }) -Radius 0 -Padding @(16, 8)))
+    }
+    [void]$w.AppsList.Children.Add((New-RvBox $list -Radius 12 -Padding @(0)))
+    if ($hits.Count -gt $shown.Count) {
+        [void]$w.AppsList.Children.Add((New-RvText (RvT 'appsMore' ($hits.Count - $shown.Count)) -Size 12 -Brush 'Ink3' -Margin @(4, 8, 0, 0)))
+    }
+}
+
+function Complete-RvAppScan {
+    param([hashtable]$Job, $Result, [string]$ErrorText)
+    $w = $script:RvWin
+    $w.Candidates = if ($Result) { @($Result.Candidates) } else { @() }
+    if ($w.Mode -eq 'installed' -and $w.View -eq 'apps') { Update-RvContent }
 }
 
 # A line of the log, in the window's language.
@@ -2726,6 +2973,31 @@ function Invoke-RvClick {
             'cancel'  { $w.Confirm = $null; Update-RvContent }
             'maint'   { Start-RvMaint $t.Kind }
             'perm'    { Start-RvPerm $t.Which ([bool]$Source.IsChecked) }
+            'screen'  {
+                $on = [bool]$Source.IsChecked
+                Set-AgentSetting -Destination $InstallDir -Name 'allowScreen' -Value $on
+                if ($w.Status) { $w.Status.AllowScreen = $on }
+                $w.Notice = @{ Kind = 'ok'; Text = (RvT $(if ($on) { 'permOn' } else { 'permOff' }) (RvT 'screenTitle')) }
+                Update-RvContent
+            }
+            'appAdd'  {
+                $pick = @($w.Candidates | Where-Object { $_.id -eq $t.Id }) | Select-Object -First 1
+                if ($pick) {
+                    $apps = @(Get-AgentApps -Destination $InstallDir | Where-Object { $_.id -ne $pick.id }) + @([pscustomobject]$pick)
+                    Save-AgentApps -Destination $InstallDir -Apps $apps
+                    if ($w.Status) { $w.Status.Apps = @(Get-AgentApps -Destination $InstallDir) }
+                    Show-RvToast (RvT 'appsAdded' $pick.name)
+                    Update-RvContent
+                }
+            }
+            'appRemove' {
+                $apps = @(Get-AgentApps -Destination $InstallDir)
+                $gone = @($apps | Where-Object { $_.id -eq $t.Id }) | Select-Object -First 1
+                Save-AgentApps -Destination $InstallDir -Apps @($apps | Where-Object { $_.id -ne $t.Id })
+                if ($w.Status) { $w.Status.Apps = @(Get-AgentApps -Destination $InstallDir) }
+                if ($gone) { Show-RvToast (RvT 'appsRemoved' $gone.name) }
+                Update-RvContent
+            }
             'extra'   { $w["Extra$($t.Which)"] = [bool]$Source.IsChecked }
             'step'    { $w.Step = $t.Step; $w.Notice = $null; Update-RvAll }
             'check'   { $w.Checks = $null; Add-RvJob @{ Kind = 'check'; Done = 'Complete-RvChecks' }; Update-RvContent }
@@ -2930,6 +3202,7 @@ function New-RvWindow {
         ExtraBios = $false; ExtraLock = $false
         Log = (New-Object System.Collections.ArrayList); Progress = 0
         Queue = (New-Object System.Collections.ArrayList); Job = $null; Runspace = $null; ToastUntil = $null
+        Candidates = $null; AppsSearch = $null; AppsList = $null
     }
     $w = $script:RvWin
 

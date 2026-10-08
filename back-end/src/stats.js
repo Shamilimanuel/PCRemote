@@ -1,6 +1,7 @@
 const os = require('os');
 const { exec } = require('child_process');
 const { PLATFORM } = require('./platform');
+const winhelper = require('./winhelper');
 
 /**
  * What the PC is currently doing, so the app can answer "is that render
@@ -130,6 +131,28 @@ async function disk() {
   return value;
 }
 
+/**
+ * The graphics card, from the Windows helper: how busy it is, its memory, and
+ * its temperature when the card's maker offers a way to read it (NVIDIA does;
+ * AMD and Intel need drivers this does not install, so theirs reads null).
+ *
+ * Never awaited by /health. The phone polls every ten seconds with a short
+ * timeout, and the helper's very first answer takes a second or two -- so
+ * this hands back the last reading and fetches the next in the background.
+ */
+let gpuCache = { value: null, at: 0, fetching: false };
+function gpu() {
+  if (!winhelper.available()) return null;
+  if (!gpuCache.fetching && Date.now() - gpuCache.at > 4000) {
+    gpuCache.fetching = true;
+    winhelper.call('gpu')
+      .then((value) => { gpuCache.value = value; })
+      .catch(() => {})
+      .finally(() => { gpuCache.at = Date.now(); gpuCache.fetching = false; });
+  }
+  return gpuCache.value;
+}
+
 async function collect() {
   const totalBytes = os.totalmem();
   const freeBytes = os.freemem();
@@ -143,6 +166,7 @@ async function collect() {
       usedPercent: Math.round(100 * (1 - freeBytes / totalBytes)),
     },
     disk: await disk(),
+    gpu: gpu(),
   };
 }
 
