@@ -404,3 +404,4 @@ reading the whole of **Done**.
 | Store listing + changelogs | `fastlane/` (its README explains the layout) |
 | The agent's HTTP API | `docs/api.md` |
 | Home Assistant integration | `integrations/home-assistant/` |
+| Interactive feature menu (example page) | `docs/feature-menu.html` — how the 8 Oct pick-your-features page was built |
