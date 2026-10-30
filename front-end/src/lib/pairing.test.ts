@@ -97,7 +97,7 @@ console.log('\n=== the old JSON code still works ===');
 
 console.log('\n=== names that would break a naive split ===');
 {
-  for (const name of ['Office-PC', 'shami-laptop', 'My PC', 'PC*with*stars', 'café-mac']) {
+  for (const name of ['Office-PC', 'demo-laptop', 'My PC', 'PC*with*stars', 'café-mac']) {
     const { compact } = agentPayload({ name });
     const result = parsePairingPayload(compact);
     is(`name ${JSON.stringify(name)}`, result.ok && result.device.name, name);
