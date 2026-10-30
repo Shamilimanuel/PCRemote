@@ -7,6 +7,9 @@ An Android app, plus a browser version, that can **start, shut down, restart, sl
 or Linux** machine over your home Wi-Fi. On Windows it can also turn the volume down, skip a song, start a game, show
 you its screen, and shut the PC down once a download has finished.
 
+The Windows agent is the one in daily use. The macOS and Linux agents are written but
+**untested on real hardware**, so expect rough edges there.
+
 <p align="center">
   <img src="docs/screenshots/waking.png" alt="The Reveille app waking a sleeping PC, with a countdown" width="32%">
   <img src="docs/screenshots/controls.png" alt="The controls for an awake PC: restart, sleep, lock, cancel, shut down, and live processor, memory and disk use" width="32%">
@@ -51,7 +54,8 @@ can do are below.
   Tailscale network) gets a 403.
 - **Each PC makes its own secret token** the first time it runs, stored only on that PC and on the paired phone (in the
   Android Keystore). It is never in this repository.
-- **Requests are signed** with that token and can't be replayed or changed on the way.
+- **Requests are signed** with that token and can't be changed on the way, and can't be replayed when
+  `REVEILLE_REQUIRE_SIGNING=1` is set on the agent (plain Bearer tokens are still accepted by default).
 - **The agent can only run a fixed set of commands** (shutdown, restart, sleep, lock and a few others). It never runs an
   arbitrary command, and "Screen" and "Answering at the lock screen" are off until you switch them on at the PC.
 - **Honest limit:** replies are signed but not encrypted, so someone on your Wi-Fi could read your PC's name, uptime and
@@ -155,6 +159,9 @@ one platform to report.
 | Reboot to BIOS | ✅ | — | — |
 | Answering at the lock screen | ✅ | — | — |
 
+The macOS and Linux columns are **untested on real hardware**: the code is there, but nobody has
+run it on a real Mac or Linux PC yet.
+
 **Reboot to BIOS** is Windows-only because it is the only one of the three where an
 elevated task can be registered once and then triggered by something holding no
 privileges of its own. Macs have no firmware screen to reach.
@@ -164,7 +171,7 @@ privileges of its own. Macs have no firmware screen to reach.
 equivalent that works without root, so the agent holds the countdown — which means
 it is called off if the agent stops. The app behaves the same either way.
 
-**None of it needs root or administrator**, on any of the three. macOS goes through
+**None of it needs root or administrator, except Reboot to BIOS and the lock-screen responder** (Windows only, off until you switch them on). macOS goes through
 System Events and Linux through systemd's user session, both of which a logged-in
 user is allowed to do.
 
@@ -176,8 +183,7 @@ and keeps the `text/plain` content type `iex` needs, and PowerShell accepts a UR
 with no scheme.
 
 Anything genuinely memorable — `irm reveille.sh | iex` — needs a domain you own,
-pointed at the raw file with a 301. See `docs/short-link.md` on the
-`short-install-url` branch.
+pointed at the raw file with a 301.
 
 **Do not use a public URL shortener for this.** Whoever controls that link
 controls what runs on the machine, and `iex` runs it without showing you first.
@@ -359,15 +365,14 @@ extra app to install for very little.
 
 ### Why not Google Play
 
-Mostly because of what it would cost in the wrong currency. A Play developer
-account is $25 once, which is fine, but it needs a Google Payments account —
-so an adult's name on it — and since 2023 a new personal account has to run a
-closed test with twelve testers for fourteen days before it may even apply to
-publish. For an app with no users yet, that is a wall rather than a step.
+Mostly because of what it would cost. A Play developer account is $25 once, and
+since 2023 a new personal account has to run a closed test with twelve testers
+for fourteen days before it may even apply to publish. For an app with no users
+yet, that is a wall rather than a step.
 
 The plan instead is [IzzyOnDroid](https://apt.izzysoft.de/fdroid/), a
 well-known third-party F-Droid repository that builds its listings from GitHub
-releases. It asks for no money and no age, and it appears inside any F-Droid
+releases. It asks for no money, and it appears inside any F-Droid
 client. Reveille already meets its requirements: MIT licensed, no adverts, no
 analytics, and no proprietary or tracking libraries of any kind —
 `fastlane/metadata/` here is the listing it reads.
