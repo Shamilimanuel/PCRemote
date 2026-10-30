@@ -1,10 +1,61 @@
 # Reveille
 
-Named for the bugle call that wakes a barracks at dawn — a remote control for your
-computer. A mobile app that can **start, shut down, restart, sleep, and lock** your
-**Windows, macOS or Linux** machine over your home Wi-Fi — and, on Windows, turn the
-volume down, skip a song, start a game, show you its screen, and shut itself down
-once a download has finished.
+**A remote control for your own computer, from your phone.** Named for the bugle call that wakes a barracks at dawn.
+(The repository is called `PCRemote`; the app is called Reveille.)
+
+An Android app, plus a browser version, that can **start, shut down, restart, sleep and lock** your **Windows, macOS
+or Linux** machine over your home Wi-Fi. On Windows it can also turn the volume down, skip a song, start a game, show
+you its screen, and shut the PC down once a download has finished.
+
+<p align="center">
+  <img src="docs/screenshots/waking.png" alt="The Reveille app waking a sleeping PC, with a countdown" width="32%">
+  <img src="docs/screenshots/controls.png" alt="The controls for an awake PC: restart, sleep, lock, cancel, shut down, and live processor, memory and disk use" width="32%">
+  <img src="docs/screenshots/pairing.png" alt="The setup window on the PC showing the pairing QR code" width="32%">
+</p>
+
+<sub>The screenshots use made-up addresses and a made-up pairing code.</sub>
+
+## Features
+
+- **Wake, shut down, restart, sleep, lock** and **cancel** a pending shutdown, with confirmation before the risky ones.
+- **Wake-on-LAN** powers a fully-off PC on from the same network.
+- **Timers and a schedule:** shut down when a download or render is finished, or at a time on chosen days.
+- **Media, apps and a message box** (Windows): volume, play/pause, start a game from a list made on the PC, show a
+  note on its screen.
+- **Live status:** an online/offline dot, and processor, memory and disk use.
+- **Browser version** for iPhones and any other device: open `http://<pc-ip>:5533`.
+- **Several PCs**, each paired by scanning a QR code; a home screen widget; update notifications.
+
+## Install
+
+On **Windows**, paste this into PowerShell on the PC you want to control:
+
+```powershell
+irm github.com/Shamilimanuel/PCRemote/raw/main/setup.ps1 | iex
+```
+
+On **macOS or Linux**, paste this into a terminal:
+
+```bash
+curl -fsSL github.com/Shamilimanuel/PCRemote/raw/main/setup.sh | bash
+```
+
+Then get the Android app from the [Releases page](https://github.com/Shamilimanuel/PCRemote/releases/latest) (the
+setup window shows a QR code for it), tap **+ Add PC** and scan the pairing code. Details, options and what each system
+can do are below.
+
+## Privacy and safety
+
+- **LAN only by design.** Your phone and PC talk directly over your own network. There is no cloud and no account.
+- **The agent refuses requests from outside your network.** Anything that isn't a home/private address (or your own
+  Tailscale network) gets a 403.
+- **Each PC makes its own secret token** the first time it runs, stored only on that PC and on the paired phone (in the
+  Android Keystore). It is never in this repository.
+- **Requests are signed** with that token and can't be replayed or changed on the way.
+- **The agent can only run a fixed set of commands** (shutdown, restart, sleep, lock and a few others). It never runs an
+  arbitrary command, and "Screen" and "Answering at the lock screen" are off until you switch them on at the PC.
+- **Honest limit:** replies are signed but not encrypted, so someone on your Wi-Fi could read your PC's name, uptime and
+  load. Read the full [Security notes](#security-notes).
 
 ## How it works
 
@@ -656,6 +707,8 @@ irm github.com/Shamilimanuel/PCRemote/raw/main/setup.ps1 | iex
 The agent generates its own token on first run, so each install is independent.
 The app is on the [releases page](https://github.com/Shamilimanuel/PCRemote/releases/latest).
 
-Two honest limits before you start: the PC side is **Windows only** (it calls
-`shutdown` and `rundll32` directly), and the app is **Android only** — an iOS
-build needs a paid Apple developer account to install on a real device.
+Two honest limits before you start: a few extras (Reboot to BIOS, Answering at the lock screen, Screen, the media and
+apps tools) are **Windows only**, and the app is **Android only**: an iOS build needs a paid Apple developer account to
+install on a real device. iPhones can use the [browser version](#using-it-from-a-browser).
+
+More projects: https://github.com/Shamilimanuel
